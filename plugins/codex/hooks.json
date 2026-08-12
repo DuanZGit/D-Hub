@@ -1,0 +1,17 @@
+{
+  "description": "One-way sync: upload the session transcript to D-Hub when a session ends.",
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/dhub_sync.py",
+            "async": true,
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
