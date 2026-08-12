@@ -313,6 +313,17 @@ dhub-uploader --source minis --url http://<d-hub>:10101 \
 
 如果需要定时，交给 cron / systemd timer 自行调度（`dhub-uploader` 本身只做单次同步）。
 
+### 4. 会话自动同步插件（推荐）
+
+`dhub-uploader` 是手动一次性同步，但**会话自动同步**更优雅的方式是用各 Agent 的**原生插件**：会话一结束自动把 transcript 推上去，零安装、零依赖、增量去重。
+
+| Agent | 机制 | 触发点 | 位置 |
+|---|---|---|---|
+| Codex | hooks | `SessionEnd` | [plugins/codex](plugins/codex/) |
+| Pi | TypeScript extension | `session_shutdown` | [plugins/pi](plugins/pi/) |
+
+详见 [plugins/README.md](plugins/README.md)。
+
 ### 原生 MCP 工具
 
 连接后，D-Hub 自动提供以下工具：
