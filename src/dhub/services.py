@@ -3,13 +3,25 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tarfile
+import tempfile
 import time
+from pathlib import Path, PurePosixPath
 
 import httpx
 
-from .config import ROOT, atomic_json, file_lock, now, read_json, safe_part
+from .config import (
+    ROOT,
+    VERSION,
+    atomic_json,
+    file_lock,
+    mutation_lock,
+    now,
+    read_json,
+    safe_part,
+)
 
 
 class AgentRegistry:
@@ -21,18 +33,19 @@ class AgentRegistry:
 
     def register(self, data):
         agent_id = safe_part(data.get("agent_id"))
-        agents = self.all()
-        previous = agents.get(agent_id, {})
-        item = {
-            **previous,
-            **data,
-            "agent_id": agent_id,
-            "enabled": data.get("enabled", previous.get("enabled", True)),
-            "registered_at": previous.get("registered_at", now()),
-            "last_seen": now(),
-        }
-        agents[agent_id] = item
-        atomic_json(self.path, agents)
+        with mutation_lock("agents"):
+            agents = self.all()
+            previous = agents.get(agent_id, {})
+            item = {
+                **previous,
+                **data,
+                "agent_id": agent_id,
+                "enabled": data.get("enabled", previous.get("enabled", True)),
+                "registered_at": previous.get("registered_at", now()),
+                "last_seen": now(),
+            }
+            agents[agent_id] = item
+            atomic_json(self.path, agents)
         return item
 
     def get(self, agent_id):
@@ -42,11 +55,13 @@ class AgentRegistry:
         return item
 
     def delete(self, agent_id):
-        agents = self.all()
-        if agent_id not in agents:
-            return False
-        del agents[agent_id]
-        atomic_json(self.path, agents)
+        agent_id = safe_part(agent_id)
+        with mutation_lock("agents"):
+            agents = self.all()
+            if agent_id not in agents:
+                return False
+            del agents[agent_id]
+            atomic_json(self.path, agents)
         return True
 
 
@@ -83,7 +98,7 @@ class AppState:
     def health(self):
         return {
             "status": "ok",
-            "version": "0.1.0",
+            "version": VERSION,
             "uptime_seconds": round(time.monotonic() - self.started, 2),
             "requests": self.requests,
             "modules": [
@@ -100,35 +115,49 @@ class AppState:
 
 
 def backup():
-    with file_lock("backup"):
+    with file_lock("backup"), file_lock("assets"):
         return _backup()
 
 
 def _backup():
+    retention_days = _backup_retention_days()
     stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns() % 1_000_000:06d}"
     destination = ROOT / "backups" / stamp
     destination.mkdir(parents=True, exist_ok=False)
-    archive = destination / "data.tar.gz"
-    with tarfile.open(archive, "w:gz") as bundle:
-        for name in ("mcp", "skills", "wiki", "files", "config", "data"):
-            bundle.add(ROOT / name, arcname=name)
-    database_status = "skipped"
-    if os.getenv("MEM0_DB_PASSWORD") and shutil_which("pg_dump"):
-        dump = destination / "mem0.sql"
-        command = [
-            "pg_dump",
-            "-h",
-            os.getenv("MEM0_DB_HOST", "127.0.0.1"),
-            "-U",
-            os.getenv("MEM0_DB_USER", "mem0"),
-            os.getenv("MEM0_DB_NAME", "mem0"),
-        ]
-        environment = dict(os.environ)
-        if os.getenv("MEM0_DB_PASSWORD"):
-            environment["PGPASSWORD"] = os.environ["MEM0_DB_PASSWORD"]
-        with dump.open("wb") as output:
-            subprocess.run(command, stdout=output, check=True, env=environment)
-        database_status = "ok"
+    destination.chmod(0o700)
+    try:
+        archive = destination / "data.tar.gz"
+        with tarfile.open(archive, "w:gz") as bundle:
+            for name in ("mcp", "skills", "wiki", "files", "config", "data"):
+                bundle.add(ROOT / name, arcname=name)
+        archive.chmod(0o600)
+        memory_backend = os.getenv("DHUB_MEMORY_BACKEND", "mem0").lower()
+        database_status = "not-required"
+        if memory_backend == "mem0":
+            if not os.getenv("MEM0_DB_PASSWORD"):
+                raise RuntimeError("MEM0_DB_PASSWORD is required for a mem0 backup")
+            if not shutil_which("pg_dump"):
+                raise RuntimeError("pg_dump is required for a mem0 backup")
+            dump = destination / "mem0.dump"
+            command = [
+                "pg_dump",
+                "--format=custom",
+                "--file",
+                str(dump),
+                "-h",
+                os.getenv("MEM0_DB_HOST", "127.0.0.1"),
+                "-U",
+                os.getenv("MEM0_DB_USER", "mem0"),
+                os.getenv("MEM0_DB_NAME", "mem0"),
+            ]
+            environment = dict(os.environ, PGPASSWORD=os.environ["MEM0_DB_PASSWORD"])
+            subprocess.run(command, check=True, env=environment)
+            dump.chmod(0o600)
+            database_status = "ok"
+    except Exception:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise
+    _prune_backups(destination, retention_days)
     return {
         "status": "ok",
         "path": str(destination),
@@ -137,8 +166,28 @@ def _backup():
     }
 
 
+def _backup_retention_days():
+    retention_days = int(os.getenv("DHUB_BACKUP_RETENTION_DAYS", "7"))
+    if retention_days < 1:
+        raise ValueError("DHUB_BACKUP_RETENTION_DAYS must be at least 1")
+    return retention_days
+
+
+def _prune_backups(current, retention_days=None):
+    retention_days = retention_days or _backup_retention_days()
+    cutoff = time.time() - retention_days * 86400
+    for candidate in (ROOT / "backups").iterdir():
+        if (
+            candidate != current
+            and candidate.is_dir()
+            and not candidate.name.startswith(".restore-")
+            and candidate.stat().st_mtime < cutoff
+        ):
+            shutil.rmtree(candidate)
+
+
 def restore(name):
-    with file_lock("backup"):
+    with file_lock("backup"), file_lock("assets"):
         return _restore(name)
 
 
@@ -147,14 +196,90 @@ def _restore(name):
     archive = ROOT / "backups" / safe_name / "data.tar.gz"
     if not archive.is_file():
         raise FileNotFoundError(name)
+    allowed_roots = {"mcp", "skills", "wiki", "files", "config", "data"}
     with tarfile.open(archive, "r:gz") as bundle:
         root = ROOT.resolve()
-        for member in bundle.getmembers():
+        members = bundle.getmembers()
+        for member in members:
+            relative = PurePosixPath(member.name)
+            if (
+                relative.is_absolute()
+                or ".." in relative.parts
+                or not relative.parts
+                or relative.parts[0] not in allowed_roots
+                or member.issym()
+                or member.islnk()
+                or member.isdev()
+                or member.isfifo()
+                or not (member.isfile() or member.isdir())
+            ):
+                raise ValueError("unsafe backup archive")
             target = (ROOT / member.name).resolve()
             if root != target and root not in target.parents:
                 raise ValueError("unsafe backup archive")
-        bundle.extractall(ROOT, filter="data")
-    return {"status": "ok", "restored": safe_name}
+        with tempfile.TemporaryDirectory(prefix=".restore-", dir=ROOT / "backups") as tmp:
+            staging = Path(tmp) / "staging"
+            staging.mkdir()
+            bundle.extractall(staging, members=members)
+            database_status = _replace_roots(
+                staging, allowed_roots, lambda: _restore_database(archive.parent)
+            )
+    return {"status": "ok", "restored": safe_name, "database": database_status}
+
+
+def _restore_database(backup_dir):
+    dump = backup_dir / "mem0.dump"
+    if not dump.is_file():
+        return "not-required"
+    if not os.getenv("MEM0_DB_PASSWORD"):
+        raise RuntimeError("MEM0_DB_PASSWORD is required to restore mem0.dump")
+    if not shutil_which("pg_restore"):
+        raise RuntimeError("pg_restore is required to restore mem0.dump")
+    environment = dict(os.environ, PGPASSWORD=os.environ["MEM0_DB_PASSWORD"])
+    command = [
+        "pg_restore",
+        "--clean",
+        "--if-exists",
+        "--exit-on-error",
+        "--single-transaction",
+        "-h",
+        os.getenv("MEM0_DB_HOST", "127.0.0.1"),
+        "-U",
+        os.getenv("MEM0_DB_USER", "mem0"),
+        "-d",
+        os.getenv("MEM0_DB_NAME", "mem0"),
+        str(dump),
+    ]
+    subprocess.run(command, check=True, env=environment)
+    return "ok"
+
+
+def _replace_roots(staging, names, after_replace=lambda: None):
+    rollback = staging.parent / "rollback"
+    rollback.mkdir()
+    moved = []
+    try:
+        for name in sorted(names):
+            source = staging / name
+            if not source.is_dir():
+                raise ValueError(f"backup archive is missing {name}")
+            current = ROOT / name
+            previous = rollback / name
+            if current.exists():
+                current.replace(previous)
+            moved.append(name)
+            source.replace(current)
+        result = after_replace()
+    except Exception:
+        for name in reversed(moved):
+            current = ROOT / name
+            previous = rollback / name
+            if current.exists():
+                shutil.rmtree(current)
+            if previous.exists():
+                previous.replace(current)
+        raise
+    return result
 
 
 def shutil_which(command):
@@ -255,7 +380,8 @@ class SemanticSync:
             )
             state[key] = digest
             ingested += 1
-        atomic_json(self.state_path, state)
+        with mutation_lock("sync-state"):
+            atomic_json(self.state_path, state)
         return ingested
 
     def _record(self, status, count, message):

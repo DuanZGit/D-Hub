@@ -10,7 +10,7 @@ from whoosh.analysis import NgramAnalyzer
 from whoosh.fields import ID, NUMERIC, TEXT, Schema
 from whoosh.qparser import MultifieldParser, OrGroup, QueryParserError
 
-from .config import ROOT, file_lock, namespace_parts, now
+from .config import ROOT, mutation_lock, namespace_parts, now
 
 
 class WikiStore:
@@ -59,8 +59,8 @@ class WikiStore:
 
     def put(self, namespace, title, content, author="api"):
         path = self.path(namespace, title)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with self.lock, file_lock("wiki"):
+        with self.lock, mutation_lock("wiki"):
+            path.parent.mkdir(parents=True, exist_ok=True)
             temporary = path.with_name("." + path.name + ".tmp")
             temporary.write_text(content, encoding="utf-8")
             temporary.replace(path)
@@ -91,7 +91,7 @@ class WikiStore:
         path = self.path(namespace, title)
         if not path.is_file():
             return False
-        with self.lock, file_lock("wiki"):
+        with self.lock, mutation_lock("wiki"):
             path.unlink()
             self._commit(path, f"wiki: delete {namespace}/{self.title_name(title)}")
             self._delete_index(namespace, self.title_name(title))
@@ -144,7 +144,7 @@ class WikiStore:
             return result
 
     def rebuild_index(self, namespace):
-        with self.lock, file_lock("wiki"):
+        with self.lock, mutation_lock("wiki"):
             return self._rebuild_index(namespace)
 
     def _rebuild_index(self, namespace):

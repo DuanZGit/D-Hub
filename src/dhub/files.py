@@ -6,7 +6,7 @@ from .config import (
     ROOT,
     atomic_bytes,
     atomic_text,
-    file_lock,
+    mutation_lock,
     namespace_parts,
     safe_part,
     tier_paths,
@@ -44,8 +44,8 @@ class NamespaceFiles:
 
     def write(self, namespace, file, data):
         path = self.safe_path(namespace, file)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with file_lock("files"):
+        with mutation_lock("files"):
+            path.parent.mkdir(parents=True, exist_ok=True)
             atomic_bytes(path, data)
         return {"file": str(file), "size": len(data)}
 
@@ -59,7 +59,7 @@ class NamespaceFiles:
         path = self.safe_path(namespace, file)
         if not path.is_file():
             return False
-        with file_lock("files"):
+        with mutation_lock("files"):
             path.unlink()
         return True
 
@@ -106,8 +106,8 @@ class SkillStore:
 
     def put(self, namespace, name, content):
         path = self.directory(namespace).joinpath(*self.parts(name), "SKILL.md")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with file_lock("skills"):
+        with mutation_lock("skills"):
+            path.parent.mkdir(parents=True, exist_ok=True)
             atomic_text(path, content)
         return {"status": "ok", "name": name, "namespace": namespace}
 
@@ -115,7 +115,7 @@ class SkillStore:
         path = self.directory(namespace).joinpath(*self.parts(name), "SKILL.md")
         if not path.is_file():
             return False
-        with file_lock("skills"):
+        with mutation_lock("skills"):
             path.unlink()
             try:
                 path.parent.rmdir()

@@ -7,9 +7,10 @@ Wants=postgresql.service
 Type=simple
 User=duanz
 WorkingDirectory=/opt/d-hub
-EnvironmentFile=-/opt/d-hub/config/dhub.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/d-hub/.venv/bin/uvicorn dhub.app:app --host 0.0.0.0 --port 10101
+EnvironmentFile=-/opt/d-hub/config/dhub.env
+ExecStart=/opt/d-hub/.venv/bin/python -m dhub
+UMask=0077
 Restart=always
 RestartSec=5
 NoNewPrivileges=true

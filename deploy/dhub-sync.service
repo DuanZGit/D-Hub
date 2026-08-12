@@ -1,0 +1,11 @@
+[Unit]
+Description=Synchronize d-hub memory and Wiki
+After=dhub.service
+Requires=dhub.service
+
+[Service]
+Type=oneshot
+User=duanz
+Environment=DHUB_URL=http://127.0.0.1:10101
+EnvironmentFile=-/opt/d-hub/config/dhub.env
+ExecStart=/opt/d-hub/scripts/sync-memory-wiki.py

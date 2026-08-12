@@ -10,10 +10,10 @@ d-hub 一个进程包含以下模块：
 | **MCP Router** | `POST /mcp` | MCP 路由：三层合并 + JSON-RPC 转发 |
 | **Memory** | `POST /memory/*` | 记忆：直接调用 mem0ai 库 |
 | **Wiki** | `POST /wiki/*` | Wiki：Markdown CRUD + 全文搜索 |
-| **Skills** | `GET/POST /skills/*` | 技能仓库：三级目录读写 |
-| **Files** | `GET/POST /files/*` | 文件共享：三级目录读写 |
+| **Skills** | `GET/PUT/DELETE /skills/*` | 技能仓库：三级目录读写 |
+| **Files** | `GET/POST/DELETE /files/*` | 文件共享：三级目录读写 |
 | **Agent Call** | `POST /agent/<id>/call` | Agent 互相调用：注册表 → 转发 |
-| **Sync** | `POST /sync/trigger` | 同步触发：cron 定时调用 |
+| **Sync** | `POST /sync/trigger` | 同步触发：systemd timer 定时调用 |
 | **Dashboard** | `GET /ui` | Web 管理界面 |
 
 ## 2. 三级目录结构（MCP、Skills、Wiki、Files 统一）
@@ -125,7 +125,7 @@ Agent 调用 MCP 工具（tools/call {name, args}）
 
 - 使用 `whoosh` 或 `sqlite-utils` 建立全文索引
 - 索引更新：写入页面时自动更新
-- 索引重建：定时 cron 任务
+- 索引重建：按需通过 API 触发
 
 ### 4.3 隔离
 
@@ -172,10 +172,10 @@ def merge_tiers(tier_type: str, agent_id: str, project: str):
 
 文件变更立即生效，无需任何同步机制。
 
-### 唯一需要 cron 的：记忆 ↔ Wiki 语义同步
+### 唯一需要定时任务的：记忆 ↔ Wiki 语义同步
 
 ```
-cron 每 4 小时：
+systemd timer 每 4 小时：
   → 从 Mem0 共识层提取记忆
   → LLM 提炼成 Wiki 页面
   → 冲突用文件锁 + last-write-wins
@@ -191,31 +191,31 @@ cron 每 4 小时：
 | Skills 写入 | 文件锁 + 原子替换 |
 | 不同 namespace | 并行无冲突 |
 
-## 8. Dashboard（全功能）
+## 8. Dashboard
 
-d-hub 内嵌 `/ui`，提供完整的可视化管理和操作界面。
+d-hub 内嵌 `/ui`，提供常用管理和操作界面。
 
 ### 功能模块
 
 | 模块 | 路由 | 功能 |
 |---|---|---|
 | **总览** | `/ui/` | 系统状态、各模块健康、运行时长、请求量 |
-| **Agent** | `/ui/agents` | 查看/添加/禁用 agent，编辑工具和项目权限 |
-| **MCP** | `/ui/mcp` | 三层 MCP 配置可视化，添加/编辑/删除工具，查看合并结果 |
-| **记忆** | `/ui/memory` | 按命名空间浏览记忆，手动添加/删除，搜索 |
-| **Wiki** | `/ui/wiki` | 页面浏览/编辑/新建，Markdown 编辑器，搜索，版本历史 |
-| **技能** | `/ui/skills` | 技能库浏览，三层覆盖视图，启用/禁用 |
-| **文件** | `/ui/files` | 上传/下载/浏览/删除共享文件 |
-| **同步** | `/ui/sync` | 查看记忆↔Wiki 同步历史，手动触发，冲突审核 |
-| **日志** | `/ui/logs` | 请求日志、错误、审计、实时 tail |
-| **配置** | `/ui/config` | 编辑 d-hub 配置（端口、密钥、agent 默认值） |
+| **Agent** | `/ui/agents` | 查看、添加和删除 agent |
+| **MCP** | `/ui/mcp` | 全局 MCP 配置添加、查看和删除 |
+| **记忆** | `/ui/memory` | 共识记忆浏览、添加和删除 |
+| **Wiki** | `/ui/wiki` | 全局页面浏览、编辑、新建和删除 |
+| **技能** | `/ui/skills` | 全局技能浏览、查看和保存 |
+| **文件** | `/ui/files` | 全局文件上传、下载、浏览和删除 |
+| **同步** | `/ui/sync` | 查看记忆↔Wiki 同步历史并手动触发 |
+| **日志** | `/ui/logs` | 查看最近的审计日志文件 |
+| **配置** | `/ui/config` | 查看当前非敏感运行配置 |
 | **备份** | `/ui/backup` | 一键备份、恢复、备份历史列表 |
 
 ### 技术
 
 - 前端：单页 HTML/JS（可内嵌 CDN 的 Vue/HTMX，或纯 JS）
 - 数据：通过 d-hub 的 REST API 读写（与 agent 同一套 API）
-- 认证：当前无（局域网），后续 JWT
+- 认证：可选全局 API key；安装脚本默认生成并启用
 - 路由：`/ui/*` 由 FastAPI 提供静态文件
 
 ### 与 agent API 的关系
@@ -230,44 +230,31 @@ app.mount("/ui", StaticFiles(directory="/opt/d-hub/dhub/ui", html=True), name="u
 
 ## 9. 安全
 
-- 局域网：无认证（当前阶段）
-- 后续公网：JWT + API key，每 agent 独立密钥
+- 局域网：Bearer 或 `X-API-Key` 全局密钥（新安装默认开启）
+- 后续公网：建议在反向代理增加 TLS，并演进为每 Agent 独立密钥
 - mcp-switch 仅 localhost，不对外暴露
 - PostgreSQL 仅 localhost，不对外暴露
-- Dashboard 无认证（局域网内），后续可加密码
+- Dashboard 静态页面公开，业务 API 使用仅保存在当前标签页的 API key
 
 ## 10. 恢复手册
 
 ### 10.1 完整恢复
 
 ```bash
-# 1. 恢复 PostgreSQL
-sudo -u postgres psql mem0 < mem0-backup.sql
-
-# 2. 恢复文件目录
-tar -xzf dhub-files-backup.tar.gz -C /
-
-# 3. 重启 d-hub
-sudo systemctl restart dhub
+# 在 Dashboard 选择备份恢复，或调用受保护的恢复 API。
+# 服务会校验并替换文件归档；如存在 mem0.dump，也会事务式恢复数据库。
 ```
 
 ### 10.2 备份脚本
 
 ```bash
-#!/bin/bash
-DATE=$(date +%Y%m%d)
-BACKUP_DIR="/opt/d-hub/backups/$DATE"
-mkdir -p "$BACKUP_DIR"
-
-# PostgreSQL
-sudo -u postgres pg_dump mem0 > "$BACKUP_DIR/mem0.sql"
-
-# 文件目录
-tar -czf "$BACKUP_DIR/files.tar.gz" /opt/d-hub/{mcp,skills,wiki,files,config}
-
-# 保留最近 7 天
-find /opt/d-hub/backups/ -maxdepth 1 -type d -mtime +7 -exec rm -rf {} \;
+set -a
+. /opt/d-hub/config/dhub.env
+set +a
+/opt/d-hub/scripts/backup.sh
 ```
+
+服务成功创建归档和数据库 dump 后，按 `DHUB_BACKUP_RETENTION_DAYS` 清理旧备份（默认 7 天）。
 
 ## 11. 开发优先级
 

@@ -7,10 +7,10 @@
 | 文件 | 内容 |
 |---|---|
 | [README.md](minis://workspace/d-hub/README.md) | 项目概述、设计原则、架构图、数据流、端口规划 |
-| [ARCHITECTURE.md](minis://workspace/d-hub/ARCHITECTURE.md) | 完整架构：模块职责、三级目录、Wiki 引擎、Dashboard 全功能、并发、安全、备份 |
+| [ARCHITECTURE.md](minis://workspace/d-hub/ARCHITECTURE.md) | 完整架构：模块职责、三级目录、Wiki 引擎、Dashboard、并发、安全、备份 |
 | [NAMESPACE.md](minis://workspace/d-hub/NAMESPACE.md) | 三级命名空间设计（global/agents/projects） |
 | [PROTOCOLS.md](minis://workspace/d-hub/PROTOCOLS.md) | 全部 API 接口定义 |
-| [DEPLOYMENT.md](minis://workspace/d-hub/DEPLOYMENT.md) | 部署步骤（PostgreSQL + mem0ai + d-hub + cron） |
+| [DEPLOYMENT.md](minis://workspace/d-hub/DEPLOYMENT.md) | 部署步骤（PostgreSQL + mem0ai + d-hub + systemd timer） |
 | [CLIENTS.md](minis://workspace/d-hub/CLIENTS.md) | 各 Agent 接入配置 |
 | [BACKUP.md](minis://workspace/d-hub/BACKUP.md) | 备份与恢复 |
 | [REFERENCES.md](minis://workspace/d-hub/REFERENCES.md) | **★ 实现参考汇总**：mem0 完整 API、mcp-switch 架构、PI-agent-wiki 语义编译、关键设计模式 |
@@ -42,8 +42,8 @@ references/
 | Files | 三层目录读写 | NAMESPACE.md |
 | Agent Registry | JSON 文件存储 | PROTOCOLS.md |
 | Agent Call | 注册表 → HTTP 转发 | PROTOCOLS.md |
-| Dashboard | 全功能 UI，复用同一套 REST API | mcp-switch 的 console/api.ts 路由清单 |
-| Sync | 仅记忆↔Wiki 语义同步（cron 每 4h），MCP/Skills 无需同步 | REFERENCES.md §5.3 |
+| Dashboard | 常用管理 UI，复用同一套 REST API | mcp-switch 的 console/api.ts 路由清单 |
+| Sync | 仅记忆↔Wiki 语义同步（systemd timer 每 4h），MCP/Skills 无需同步 | REFERENCES.md §5.3 |
 
 ### 3. mem0 配置（New-API 兼容）
 

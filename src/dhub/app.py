@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import hmac
 import os
 import subprocess
+import time
+import threading
+import uuid
 from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
 from pydantic import BaseModel, Field
 
 from .config import (
@@ -14,7 +24,7 @@ from .config import (
     VERSION,
     atomic_json,
     ensure_layout,
-    file_lock,
+    mutation_lock,
     namespace_parts,
     safe_part,
 )
@@ -31,6 +41,11 @@ sync = SemanticSync(memory, wiki)
 app = FastAPI(
     title="d-hub", version=VERSION, description="Multi-agent coordination layer"
 )
+MCP_PROTOCOL_VERSION = "2025-03-26"
+MCP_SESSION_TTL_SECONDS = int(os.getenv("DHUB_MCP_SESSION_TTL_SECONDS", "86400"))
+mcp_sessions: dict[str, tuple[float, str | None, str | None]] = {}
+mcp_sessions_lock = threading.Lock()
+API_KEY = os.getenv("DHUB_API_KEY")
 
 
 class RegisterIn(BaseModel):
@@ -94,6 +109,27 @@ class AgentCall(BaseModel):
 @app.middleware("http")
 async def request_metrics(request: Request, call_next):
     state.requests += 1
+    public = (
+        request.url.path in {"/", "/health", "/docs", "/redoc", "/openapi.json"}
+        or request.url.path == "/ui"
+        or request.url.path.startswith("/ui/")
+    )
+    authorization = request.headers.get("Authorization", "")
+    bearer = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+    supplied_key = bearer or request.headers.get("X-API-Key", "")
+    if API_KEY and not public and not hmac.compare_digest(supplied_key, API_KEY):
+        state.audit.write(
+            "http",
+            False,
+            method=request.method,
+            path=request.url.path,
+            status=401,
+        )
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "valid API key required"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     try:
         response = await call_next(request)
         if request.method != "GET":
@@ -121,12 +157,18 @@ async def value_error(_, exc):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse("/ui")
+
+
 @app.get("/health")
 def health():
     return {
         **state.health(),
         "memory_backend": memory.backend,
         "memory_error": memory.error,
+        "authentication": "enabled" if API_KEY else "disabled",
     }
 
 
@@ -166,6 +208,129 @@ async def mcp_call(body: McpCall):
         raise HTTPException(502, f"MCP upstream failed: {exc}") from exc
 
 
+def mcp_response(request_id, *, result=None, error=None, headers=None):
+    payload = {"jsonrpc": "2.0", "id": request_id}
+    if error is None:
+        payload["result"] = result if result is not None else {}
+    else:
+        payload["error"] = error
+    return JSONResponse(payload, headers=headers)
+
+
+def mcp_session_get(session_id: str | None):
+    now = time.monotonic()
+    with mcp_sessions_lock:
+        expired = [
+            existing
+            for existing, (last_seen, _, _) in mcp_sessions.items()
+            if now - last_seen > MCP_SESSION_TTL_SECONDS
+        ]
+        for existing in expired:
+            mcp_sessions.pop(existing, None)
+        if not session_id or session_id not in mcp_sessions:
+            return None
+        _, agent_id, project = mcp_sessions[session_id]
+        mcp_sessions[session_id] = (now, agent_id, project)
+        return agent_id, project
+
+
+@app.post("/mcp", include_in_schema=False)
+async def streamable_mcp(
+    request: Request, agent_id: str | None = None, project: str | None = None
+):
+    try:
+        payload = await request.json()
+    except ValueError:
+        return mcp_response(
+            None, error={"code": -32700, "message": "Parse error"}, headers=None
+        )
+    if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
+        return mcp_response(None, error={"code": -32600, "message": "Invalid Request"})
+
+    request_id = payload.get("id")
+    method = payload.get("method")
+    params = payload.get("params") or {}
+    if not isinstance(method, str) or not isinstance(params, dict):
+        return mcp_response(
+            request_id, error={"code": -32600, "message": "Invalid Request"}
+        )
+    if method == "initialize":
+        if request_id is None:
+            return mcp_response(
+                None, error={"code": -32600, "message": "Invalid Request"}
+            )
+        session_id = uuid.uuid4().hex
+        with mcp_sessions_lock:
+            mcp_sessions[session_id] = (time.monotonic(), agent_id, project)
+        requested_version = params.get("protocolVersion")
+        protocol_version = (
+            MCP_PROTOCOL_VERSION
+            if requested_version != MCP_PROTOCOL_VERSION
+            else requested_version
+        )
+        return mcp_response(
+            request_id,
+            result={
+                "protocolVersion": protocol_version,
+                "capabilities": {"tools": {"listChanged": False}},
+                "serverInfo": {"name": "d-hub", "version": VERSION},
+            },
+            headers={"Mcp-Session-Id": session_id},
+        )
+
+    session_id = request.headers.get("Mcp-Session-Id")
+    context = mcp_session_get(session_id)
+    if context is None:
+        if request_id is None:
+            return Response(status_code=404)
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32001, "message": "Invalid or missing MCP session"},
+            },
+            status_code=404,
+        )
+    agent_id, project = context
+    if request_id is None:
+        return Response(status_code=202)
+    try:
+        if method == "ping":
+            result = {}
+        elif method == "tools/list":
+            result = await mcp.list_tools(agent_id, project)
+        elif method == "tools/call":
+            result = await mcp.call(
+                params.get("name", ""),
+                params.get("arguments") or {},
+                agent_id,
+                project,
+            )
+        else:
+            return mcp_response(
+                request_id, error={"code": -32601, "message": "Method not found"}
+            )
+    except (KeyError, ValueError) as exc:
+        return mcp_response(
+            request_id, error={"code": -32602, "message": str(exc).strip("'")}
+        )
+    except (httpx.HTTPError, OSError, RuntimeError) as exc:
+        return mcp_response(
+            request_id, error={"code": -32000, "message": f"MCP upstream failed: {exc}"}
+        )
+    return mcp_response(request_id, result=result)
+
+
+@app.delete("/mcp", include_in_schema=False)
+def close_mcp_session(request: Request):
+    session_id = request.headers.get("Mcp-Session-Id")
+    if mcp_session_get(session_id) is None:
+        raise HTTPException(404, "MCP session not found")
+    with mcp_sessions_lock:
+        mcp_sessions.pop(session_id, None)
+    return Response(status_code=204)
+
+
 @app.get("/mcp/configs")
 def mcp_configs(agent_id: str | None = None, project: str | None = None):
     return {"configs": mcp.configs(agent_id, project)}
@@ -175,9 +340,9 @@ def mcp_configs(agent_id: str | None = None, project: str | None = None):
 def mcp_config_put(body: McpConfigPut):
     tier, ident = namespace_parts(body.namespace)
     directory = ROOT / "mcp" / tier if tier == "global" else ROOT / "mcp" / tier / ident
-    with file_lock("mcp"):
+    with mutation_lock("mcp"):
         atomic_json(directory / (safe_part(body.server_id) + ".json"), body.config)
-        mcp.cache.clear()
+        mcp.clear()
     return {"status": "ok", "server_id": body.server_id, "namespace": body.namespace}
 
 
@@ -186,10 +351,11 @@ def mcp_config_delete(namespace: str, server_id: str):
     tier, ident = namespace_parts(namespace)
     directory = ROOT / "mcp" / tier if tier == "global" else ROOT / "mcp" / tier / ident
     path = directory / (safe_part(server_id) + ".json")
-    if not path.is_file():
-        raise HTTPException(404, "MCP config not found")
-    path.unlink()
-    mcp.cache.clear()
+    with mutation_lock("mcp"):
+        if not path.is_file():
+            raise HTTPException(404, "MCP config not found")
+        path.unlink()
+        mcp.clear()
     return {"status": "ok"}
 
 
@@ -350,16 +516,20 @@ def sync_history():
 def run_backup():
     try:
         return backup()
-    except (OSError, subprocess.SubprocessError) as exc:
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
         raise HTTPException(500, str(exc)) from exc
 
 
 @app.post("/backup/{name}/restore")
 def run_restore(name: str):
     try:
-        return restore(name)
+        result = restore(name)
+        mcp.clear()
+        return result
     except FileNotFoundError as exc:
         raise HTTPException(404, "backup not found") from exc
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        raise HTTPException(500, str(exc)) from exc
 
 
 @app.get("/backups")

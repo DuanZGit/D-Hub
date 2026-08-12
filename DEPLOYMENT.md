@@ -24,87 +24,43 @@ sudo -u postgres psql -c "CREATE USER mem0 WITH PASSWORD '$(openssl rand -base64
 sudo -u postgres psql -c "GRANT ALL ON DATABASE mem0 TO mem0;"
 ```
 
-## 第二步：创建目录结构
+## 第二步：安装 d-hub
+
+在源码目录执行安装脚本。脚本会创建目录、安装当前项目包及依赖、生成 API key、写入 systemd unit，并启用定时器：
 
 ```bash
-sudo mkdir -p /opt/d-hub/{mcp/{global,agents,projects},skills/{global,agents,projects},wiki/{global,agents,projects},files/{global,agents,projects},config,logs,scripts}
-sudo chown -R duanz:duanz /opt/d-hub
+sudo apt install python3-venv
+./deploy/install.sh
 ```
 
-## 第三步：安装 Python 依赖
+如需手工安装 Python 包，必须安装项目本身，不能只安装依赖：
 
 ```bash
 python3 -m venv /opt/d-hub/.venv
-source /opt/d-hub/.venv/bin/activate
-pip install mem0ai fastapi uvicorn httpx pydantic python-multipart whoosh
+/opt/d-hub/.venv/bin/pip install '/path/to/D-Hub[memory]'
 ```
 
-## 第四步：创建 d-hub 服务
-
-位置：`/opt/d-hub/dhub/main.py`
-
-```python
-# 强模型参考 ARCHITECTURE.md 实现以下模块：
-#   1. Agent Registry（JSON 文件存储）
-#   2. MCP Router（三层合并 + JSON-RPC 转发）
-#   3. Memory（mem0ai 库，三级命名空间）
-#   4. Wiki（Markdown CRUD + whoosh 全文搜索）
-#   5. Skills API（三级目录读写）
-#   6. Files API（三级目录读写）
-#   7. Agent Call Router（注册表 → 转发）
-#   8. Sync（手动/定时触发）
-#   9. Dashboard（HTML/JS 静态文件）
-```
-
-## 第五步：Systemd 服务
+## 第三步：验证
 
 ```bash
-sudo tee /etc/systemd/system/dhub.service << 'EOF'
-[Unit]
-Description=d-hub Agent Coordination Layer
-After=network.target postgresql.service
-Requires=postgresql.service
-
-[Service]
-Type=simple
-User=duanz
-WorkingDirectory=/opt/d-hub
-ExecStart=/opt/d-hub/.venv/bin/uvicorn dhub.main:app --host 0.0.0.0 --port 10101
-Restart=always
-RestartSec=10
-Environment="PYTHONUNBUFFERED=1"
-Environment="MEM0_DB_PASSWORD=your-password-here"
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now dhub
-```
-
-## 第六步：验证
-
-```bash
-curl http://localhost:10101/health
+curl -fsS http://localhost:10101/health
 # {"status":"ok","version":"0.1.0","modules":["mcp","memory","wiki","skills","files","registry","dashboard"]}
+curl -I http://localhost:10101/
+# HTTP/1.1 307 Temporary Redirect，Location: /ui
+systemctl status dhub --no-pager
 ```
 
-## 第七步：配置 Cron（仅语义同步）
+浏览器访问 `http://192.168.5.242:10101/`，应自动跳转到 Dashboard。若仍返回
+`{"detail":"Not Found"}`，说明端口上运行的不是当前版本；重新执行
+`./deploy/install.sh`，再检查 `journalctl -u dhub -n 100 --no-pager`。
+
+## 第四步：检查定时任务
 
 ```bash
-crontab -e
+systemctl list-timers 'dhub-*'
 ```
 
-```
-# 每 4 小时同步记忆 ↔ Wiki（LLM 提炼）
-0 */4 * * * /opt/d-hub/.venv/bin/python /opt/d-hub/scripts/sync-memory-wiki.py >> /opt/d-hub/logs/sync.log 2>&1
-
-# 每日备份
-0 2 * * * /opt/d-hub/scripts/backup.sh >> /opt/d-hub/logs/backup.log 2>&1
-```
-
-> MCP、Skills 配置无需 cron 同步。文件变更立即生效，d-hub 每次请求实时读目录合并。
+> MCP、Skills 配置无需定时同步。文件变更立即生效，d-hub 每次请求实时读目录合并。
 
 ## 验证清单
 
@@ -116,5 +72,5 @@ crontab -e
 - [ ] 记忆读写正常
 - [ ] Wiki 读写正常
 - [ ] Skills 读写正常
-- [ ] 记忆↔Wiki 语义同步 cron 正常
+- [ ] 记忆↔Wiki 同步和每日备份 timer 正常
 - [ ] Dashboard 可访问（:10101/ui）
