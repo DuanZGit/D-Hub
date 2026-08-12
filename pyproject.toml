@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "d-hub"
 version = "0.1.0"
-description = "One-process multi-agent coordination layer"
+description = "D-Hub: one-process multi-agent coordination layer"
 requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.110",

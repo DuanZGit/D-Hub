@@ -3,8 +3,8 @@ import io
 import os
 import sys
 import tarfile
-import time
 import threading
+import time
 from pathlib import Path
 
 import pytest
