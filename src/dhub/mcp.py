@@ -16,9 +16,7 @@ from .config import VERSION, merged_json
 class McpRouter:
     """Resolve tiered MCP configs and proxy JSON-RPC calls."""
 
-    def __init__(
-        self, cache_ttl: float = 120, session_ttl: float = 3600, native=None
-    ):
+    def __init__(self, cache_ttl: float = 120, session_ttl: float = 3600, native=None):
         self.cache_ttl = cache_ttl
         self.session_ttl = session_ttl
         self.cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
@@ -158,17 +156,26 @@ class McpRouter:
         with self._session_state_lock:
             generation = self._session_generation
             lock = self.http_session_locks.setdefault(session_key, asyncio.Lock())
-        async with lock:
-            async with httpx.AsyncClient(
-                timeout=float(config.get("timeout", 30))
-            ) as client:
+        async with (
+            lock,
+            httpx.AsyncClient(timeout=float(config.get("timeout", 30))) as client,
+        ):
+            with self._session_state_lock:
+                existing = self.http_sessions.get(session_key)
+            session_id = existing[1] if existing else None
+            if existing is None:
+                session_id = await self._initialize_http_session(client, url, headers)
+            response = await self._http_post(
+                client,
+                url,
+                payload,
+                headers,
+                session_id,
+            )
+            if response.status_code == 404:
                 with self._session_state_lock:
-                    existing = self.http_sessions.get(session_key)
-                session_id = existing[1] if existing else None
-                if existing is None:
-                    session_id = await self._initialize_http_session(
-                        client, url, headers
-                    )
+                    self.http_sessions.pop(session_key, None)
+                session_id = await self._initialize_http_session(client, url, headers)
                 response = await self._http_post(
                     client,
                     url,
@@ -176,27 +183,14 @@ class McpRouter:
                     headers,
                     session_id,
                 )
-                if response.status_code == 404:
-                    with self._session_state_lock:
-                        self.http_sessions.pop(session_key, None)
-                    session_id = await self._initialize_http_session(
-                        client, url, headers
-                    )
-                    response = await self._http_post(
-                        client,
-                        url,
-                        payload,
-                        headers,
+            response.raise_for_status()
+            with self._session_state_lock:
+                if generation == self._session_generation:
+                    self.http_sessions[session_key] = (
+                        time.monotonic(),
                         session_id,
                     )
-                response.raise_for_status()
-                with self._session_state_lock:
-                    if generation == self._session_generation:
-                        self.http_sessions[session_key] = (
-                            time.monotonic(),
-                            session_id,
-                        )
-                return self._decode_http_response(response, payload.get("id"))
+            return self._decode_http_response(response, payload.get("id"))
 
     async def _initialize_http_session(self, client, url, headers):
         initialize = {
@@ -220,9 +214,7 @@ class McpRouter:
             "method": "notifications/initialized",
             "params": {},
         }
-        notified = await self._http_post(
-            client, url, notification, headers, session_id
-        )
+        notified = await self._http_post(client, url, notification, headers, session_id)
         notified.raise_for_status()
         return session_id
 

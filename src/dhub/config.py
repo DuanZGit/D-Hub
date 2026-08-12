@@ -29,7 +29,7 @@ try:
 except PackageNotFoundError:
     VERSION = "0.1.0"
 TIERS = ("global", "agents", "projects")
-TYPES = ("mcp", "skills", "wiki", "files")
+TYPES = ("mcp", "skills", "wiki", "files", "sessions")
 _LOCAL_LOCKS: dict[str, threading.RLock] = {}
 _LOCAL_LOCKS_GUARD = threading.Lock()
 

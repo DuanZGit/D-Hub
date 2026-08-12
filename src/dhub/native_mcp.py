@@ -7,20 +7,19 @@ from typing import Any
 class NativeMcpTools:
     """Expose d-hub stores as MCP tools bound to the client session context."""
 
-    def __init__(self, memory, wiki, skills, files, max_read_bytes: int = 262_144):
+    def __init__(self, memory, wiki, skills, files, sessions=None, max_read_bytes: int = 262_144):
         self.memory = memory
         self.wiki = wiki
         self.skills = skills
         self.files = files
+        self.sessions = sessions
         self.max_read_bytes = max_read_bytes
         self._tools = self._tool_definitions()
 
     def list_tools(self):
         return [dict(tool) for tool in self._tools]
 
-    def call(
-        self, name, arguments, agent_id=None, project=None, allow_global=False
-    ):
+    def call(self, name, arguments, agent_id=None, project=None, allow_global=False):
         arguments = arguments or {}
         scope = arguments.get("scope", "project" if project else "agent")
         if scope == "global" and not allow_global:
@@ -97,6 +96,46 @@ class NativeMcpTools:
             except UnicodeDecodeError as exc:
                 raise ValueError("MCP can only read UTF-8 text files") from exc
             result = {"file": file_name, "content": content}
+        elif name == "dhub_session_create":
+            result = self.sessions.create(
+                namespace,
+                title=arguments.get("title"),
+                cwd=arguments.get("cwd"),
+                agent_id=agent_id,
+                project=project,
+                metadata=arguments.get("metadata") or {},
+            )
+        elif name == "dhub_session_list":
+            result = {
+                "sessions": self.sessions.list(
+                    namespace, self._limit(arguments, 100, 500)
+                )
+            }
+        elif name == "dhub_session_get":
+            try:
+                result = self.sessions.get(
+                    namespace, self._required(arguments, "session_id")
+                )
+            except FileNotFoundError as exc:
+                raise KeyError("Session not found") from exc
+        elif name == "dhub_session_append":
+            try:
+                result = self.sessions.append(
+                    namespace,
+                    self._required(arguments, "session_id"),
+                    arguments.get("messages") or [],
+                    arguments.get("metadata"),
+                )
+            except FileNotFoundError as exc:
+                raise KeyError("Session not found") from exc
+        elif name == "dhub_session_search":
+            result = {
+                "results": self.sessions.search(
+                    namespace,
+                    str(arguments.get("query", "")),
+                    self._limit(arguments, 20, 100),
+                )
+            }
         else:
             raise KeyError("MCP tool not found")
         return self._result(result)
@@ -234,6 +273,54 @@ class NativeMcpTools:
                 "description": "Read a UTF-8 text file stored in d-hub.",
                 "inputSchema": schema(
                     {"file": {"type": "string", "minLength": 1}}, ("file",)
+                ),
+            },
+            {
+                "name": "dhub_session_create",
+                "description": "Create a new session transcript in d-hub (a conversation log).",
+                "inputSchema": schema(
+                    {
+                        "title": {"type": "string"},
+                        "cwd": {"type": "string"},
+                        "metadata": {"type": "object"},
+                    }
+                ),
+            },
+            {
+                "name": "dhub_session_list",
+                "description": "List session transcripts in one d-hub scope.",
+                "inputSchema": schema(
+                    {"limit": {"type": "integer", "minimum": 1, "maximum": 500}}
+                ),
+            },
+            {
+                "name": "dhub_session_get",
+                "description": "Read a full session transcript including its messages.",
+                "inputSchema": schema(
+                    {"session_id": {"type": "string", "minLength": 1}},
+                    ("session_id",),
+                ),
+            },
+            {
+                "name": "dhub_session_append",
+                "description": "Append message events to a session transcript.",
+                "inputSchema": schema(
+                    {
+                        "session_id": {"type": "string", "minLength": 1},
+                        "messages": {"type": "array"},
+                        "metadata": {"type": "object"},
+                    },
+                    ("session_id", "messages"),
+                ),
+            },
+            {
+                "name": "dhub_session_search",
+                "description": "Search session transcripts and messages for a query.",
+                "inputSchema": schema(
+                    {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                    }
                 ),
             },
         ]

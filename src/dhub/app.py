@@ -33,12 +33,14 @@ from .mcp import McpRouter
 from .memory import MemoryStore
 from .native_mcp import NativeMcpTools
 from .services import AppState, SemanticSync, backup, restore
+from .sessions import SessionStore
 from .wiki import WikiStore
 
 ensure_layout()
 state, memory, wiki = AppState(), MemoryStore(), WikiStore()
 files, skills = NamespaceFiles(), SkillStore()
-mcp = McpRouter(native=NativeMcpTools(memory, wiki, skills, files))
+sessions = SessionStore()
+mcp = McpRouter(native=NativeMcpTools(memory, wiki, skills, files, sessions))
 sync = SemanticSync(memory, wiki)
 app = FastAPI(
     title="d-hub", version=VERSION, description="Multi-agent coordination layer"
@@ -90,6 +92,21 @@ class SkillPut(BaseModel):
 class McpList(BaseModel):
     agent_id: str | None = None
     project: str | None = None
+
+
+class SessionCreate(BaseModel):
+    namespace: str = "global"
+    title: str | None = None
+    cwd: str | None = None
+    agent_id: str | None = None
+    project: str | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
+class SessionAppend(BaseModel):
+    namespace: str = "global"
+    messages: list[dict]
+    metadata: dict = Field(default_factory=dict)
 
 
 class McpCall(McpList):
@@ -188,7 +205,9 @@ def register(body: RegisterIn):
 @app.get("/agents")
 def agents():
     return {
-        "agents": [state.registry.public(item) for item in state.registry.all().values()]
+        "agents": [
+            state.registry.public(item) for item in state.registry.all().values()
+        ]
     }
 
 
@@ -279,11 +298,15 @@ async def streamable_mcp(
                 None, error={"code": -32600, "message": "Invalid Request"}
             )
         authorization = request.headers.get("Authorization", "")
-        bearer = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        bearer = (
+            authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        )
         supplied_key = bearer or request.headers.get("X-API-Key", "")
         is_admin = bool(ADMIN_KEY and hmac.compare_digest(supplied_key, ADMIN_KEY))
-        if ADMIN_KEY and not is_admin and not state.registry.authenticate(
-            agent_id, supplied_key, project
+        if (
+            ADMIN_KEY
+            and not is_admin
+            and not state.registry.authenticate(agent_id, supplied_key, project)
         ):
             return JSONResponse(
                 status_code=401,
@@ -298,6 +321,17 @@ async def streamable_mcp(
                 project,
                 is_admin,
             )
+        if not is_admin and agent_id:
+            try:
+                state.registry.get(agent_id)
+            except KeyError:
+                state.registry.register(
+                    {
+                        "agent_id": agent_id,
+                        "projects": [project] if project else [],
+                        "enabled": True,
+                    }
+                )
         requested_version = params.get("protocolVersion")
         protocol_version = (
             MCP_PROTOCOL_VERSION
@@ -352,9 +386,7 @@ async def streamable_mcp(
             request_id, error={"code": -32602, "message": str(exc).strip("'")}
         )
     except PermissionError as exc:
-        return mcp_response(
-            request_id, error={"code": -32003, "message": str(exc)}
-        )
+        return mcp_response(request_id, error={"code": -32003, "message": str(exc)})
     except (httpx.HTTPError, OSError, RuntimeError) as exc:
         return mcp_response(
             request_id, error={"code": -32000, "message": f"MCP upstream failed: {exc}"}
@@ -419,6 +451,59 @@ def memory_list(namespace: str = "global", agent_id: str = "shared", limit: int 
 def memory_delete(memory_id: str):
     if not memory.delete(memory_id):
         raise HTTPException(404, "memory not found")
+    return {"status": "ok"}
+
+
+@app.post("/sessions")
+def session_create(body: SessionCreate):
+    return sessions.create(
+        body.namespace,
+        title=body.title,
+        cwd=body.cwd,
+        agent_id=body.agent_id,
+        project=body.project,
+        metadata=body.metadata,
+    )
+
+
+@app.get("/sessions")
+def session_list(namespace: str = "global", limit: int = 100):
+    return {"sessions": sessions.list(namespace, limit)}
+
+
+@app.get("/sessions/search")
+def session_search(namespace: str = "global", q: str = "", limit: int = 20):
+    return {"results": sessions.search(namespace, q, limit)}
+
+
+@app.get("/sessions/{session_id}")
+def session_get(session_id: str, namespace: str = "global"):
+    try:
+        return sessions.get(namespace, session_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "session not found") from exc
+
+
+@app.post("/sessions/{session_id}/messages")
+def session_append(session_id: str, body: SessionAppend):
+    try:
+        return sessions.append(body.namespace, session_id, body.messages, body.metadata)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "session not found") from exc
+
+
+@app.patch("/sessions/{session_id}")
+def session_update(session_id: str, body: dict, namespace: str = "global"):
+    try:
+        return sessions.update(namespace, session_id, **body)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "session not found") from exc
+
+
+@app.delete("/sessions/{session_id}")
+def session_delete(session_id: str, namespace: str = "global"):
+    if not sessions.delete(namespace, session_id):
+        raise HTTPException(404, "session not found")
     return {"status": "ok"}
 
 
@@ -628,6 +713,7 @@ def dashboard_data(module: str):
         "wiki": lambda: {"pages": wiki.list("global")},
         "skills": lambda: {"skills": skills.list()},
         "files": lambda: {"files": files.list("global")},
+        "sessions": lambda: {"sessions": sessions.list("global", 100)},
         "sync": lambda: {
             "history": sync.history(),
             "ready": bool(os.getenv("NEW_API_KEY") and os.getenv("DHUB_LLM_MODEL")),

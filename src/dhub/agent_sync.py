@@ -101,7 +101,7 @@ class AgentAssetSync:
         manifest = self._expand(manifest, variables)
         assets = manifest.get("assets") or {}
         if not isinstance(assets, dict):
-            raise ValueError("assets must be an object")
+            raise TypeError("assets must be an object")
         original_dry_run = self.dry_run
         self.dry_run = True
         validation_actions = []
@@ -139,7 +139,8 @@ class AgentAssetSync:
             "agent_id": manifest["agent_id"],
             "host": manifest.get("host"),
             "url": manifest.get("callback_url"),
-            "tools": manifest.get("tools") or [
+            "tools": manifest.get("tools")
+            or [
                 "memory",
                 "wiki",
                 "mcp",
@@ -153,9 +154,7 @@ class AgentAssetSync:
 
     def _sync_mcp(self, item, actions):
         namespace = self._namespace(item)
-        server_id = self._safe_part(
-            self._required(item, "server_id"), "server_id"
-        )
+        server_id = self._safe_part(self._required(item, "server_id"), "server_id")
         config = self._json_source(item)
         self._json_action(
             f"mcp:{namespace}/{server_id}",
@@ -246,11 +245,9 @@ class AgentAssetSync:
         if "config" in item:
             value = item["config"]
         else:
-            value = json.loads(
-                self._read_text(self._required(item, "path"))
-            )
+            value = json.loads(self._read_text(self._required(item, "path")))
         if not isinstance(value, dict):
-            raise ValueError("MCP config must be a JSON object")
+            raise TypeError("MCP config must be a JSON object")
         return value
 
     def _text_source(self, item):
@@ -340,7 +337,9 @@ def build_parser():
         description="Register an agent and synchronize its declared assets to d-hub."
     )
     parser.add_argument("manifest", nargs="?", default="dhub-agent.json")
-    parser.add_argument("--url", default=os.getenv("DHUB_URL", "http://127.0.0.1:10101"))
+    parser.add_argument(
+        "--url", default=os.getenv("DHUB_URL", "http://127.0.0.1:10101")
+    )
     parser.add_argument(
         "--api-key",
         default=os.getenv("DHUB_ADMIN_KEY") or os.getenv("DHUB_API_KEY"),

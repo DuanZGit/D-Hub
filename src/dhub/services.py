@@ -138,6 +138,7 @@ class AppState:
                 "wiki",
                 "skills",
                 "files",
+                "sessions",
                 "registry",
                 "sync",
                 "dashboard",
@@ -248,7 +249,9 @@ def _restore(name):
             target = (ROOT / member.name).resolve()
             if root != target and root not in target.parents:
                 raise ValueError("unsafe backup archive")
-        with tempfile.TemporaryDirectory(prefix=".restore-", dir=ROOT / "backups") as tmp:
+        with tempfile.TemporaryDirectory(
+            prefix=".restore-", dir=ROOT / "backups"
+        ) as tmp:
             staging = Path(tmp) / "staging"
             staging.mkdir()
             bundle.extractall(staging, members=members)
