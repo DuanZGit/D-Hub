@@ -86,6 +86,18 @@ function postJson(apiPath: string, payload: unknown): Promise<Record<string, unk
   });
 }
 
+function sanitize(str: string): string {
+  // 清洗孤立 Unicode surrogate（emoji 被截断等产生的非法字符），
+  // 否则 Node 端 JSON.stringify 会输出 \udXXX 转义，Python 端 D-Hub 无法编码。
+  if (typeof (str as { toWellFormed?: () => string }).toWellFormed === "function") {
+    return (str as { toWellFormed: () => string }).toWellFormed();
+  }
+  return str.replace(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+    "\uFFFD",
+  );
+}
+
 function contentToText(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
@@ -119,7 +131,7 @@ function parseMessages(lines: string[]): Array<{ role: string; content: string }
     let role = String(msg.role ?? "");
     if (role === "toolResult" || role === "bashExecution") role = "tool";
     else if (role !== "user" && role !== "assistant") role = "system";
-    const content = contentToText(msg.content);
+    const content = sanitize(contentToText(msg.content));
     if (!content.trim()) continue;
     messages.push({ role, content });
   }
@@ -161,6 +173,9 @@ async function syncSession(sessionFile: string): Promise<void> {
     if (!sessionId) throw new Error("failed to create d-hub session");
     record = { session_id: sessionId, offset: 0 };
     state.sessions[sessionFile] = record;
+    // 立即持久化 session 映射：即使后续 messages 上传失败，
+    // 重跑时也能复用同一个远程 session，避免重复创建。
+    saveState(state);
   }
 
   const offset = record.offset;
