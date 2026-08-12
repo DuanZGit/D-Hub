@@ -9,5 +9,6 @@ dist/
 *.egg-info/
 .env
 .coverage
+.dhub-admin-key
 
 references/
