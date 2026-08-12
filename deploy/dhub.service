@@ -1,0 +1,21 @@
+[Unit]
+Description=d-hub Multi-Agent Coordination Layer
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=duanz
+WorkingDirectory=/opt/d-hub
+EnvironmentFile=-/opt/d-hub/config/dhub.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/d-hub/.venv/bin/uvicorn dhub.app:app --host 0.0.0.0 --port 10101
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/d-hub
+
+[Install]
+WantedBy=multi-user.target
