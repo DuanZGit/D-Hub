@@ -112,3 +112,40 @@ curl -sS -G "$DHUB_URL/sessions/<session_id>" \
 - `401` → API key 不对，检查 `$DHUB_API_KEY`，不要重试。
 - `404` → 资源不存在（session/wiki 未建），先创建再操作。
 - `422` → 参数格式错，看返回的 `detail` 字段改参数。
+
+## 服务端配置速查（mem0 / LLM / embedding）
+
+以下配置在 D-Hub 服务器（UG）的 `/opt/d-hub/config/dhub.env`，改完 `sudo systemctl restart dhub`。
+
+### 当前生效配置（2026-08-13）
+
+| 键 | 值 | 说明 |
+|---|---|---|
+| `NEW_API_BASE_URL` | `https://api.duanz.xin:1217/v1` | NewAPI 地址（**必须 https**，http 会 307 重定向） |
+| `DHUB_EMBED_MODEL` | `siliconflow/Qwen/Qwen3-Embedding-8B` | embedding 模型（**必须带渠道前缀**，裸名 `Qwen/...` 在 NewAPI 上 model_not_found） |
+| `DHUB_EMBED_DIMS` | `4096` | Qwen3-Embedding Matryoshka 支持 4096 维 |
+| `DHUB_LLM_MODEL` | `stepfun/step-3.7-flash` | 语义同步 LLM |
+| `DHUB_MEMORY_BACKEND` | `mem0` | 启用向量后端 |
+| `NEW_API_KEY` | 环境变量 | 从 Minis 环境变量 `NEW_API_KEY` 读 |
+
+### 已知坑（改配置前先看）
+
+1. **NewAPI 需要模型映射**：NewAPI 上模型 ID 带渠道前缀（如 `siliconflow/Qwen/...`），转发给上游时**必须**在渠道里配好模型映射剥掉前缀，否则上游报 "Model does not exist"。
+2. **HNSW 索引上限 2000 维**：Qwen3-Embedding-8B 输出 4096 维，pgvector 的 HNSW 索引会报 `column cannot have more than 2000 dimensions`。已在 `memory.py` 里把 `"hnsw": True` 改成 `False`（用 IVFFlat）。
+3. **缺 PostgreSQL 驱动**：`pip install psycopg2-binary`。
+4. **重启后验证**：`curl http://127.0.0.1:10101/health`，看 `memory_backend` 应为 `mem0`、`memory_error` 为 `null`。
+
+### 验证语义搜索
+
+```bash
+# 写一条
+curl -sS -X POST "$DHUB_URL/memory/add" -H "Authorization: Bearer $DHUB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"namespace":"<ns>","agent_id":"<id>","content":"测试内容","infer":false}'
+# 语义搜（搜近义词/相关概念也能命中）
+curl -sS -X POST "$DHUB_URL/memory/search" -H "Authorization: Bearer $DHUB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"namespace":"<ns>","agent_id":"<id>","query":"<相关但不同的词>","limit":5}'
+```
+
+返回 `score` 是相似度，越接近 1 越相关。
