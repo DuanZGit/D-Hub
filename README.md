@@ -285,9 +285,11 @@ pip install d-hub
 dhub-agent-sync .dhub/dhub-agent.json
 ```
 
-### 3. 单向自动上传（dhub-uploader）
+### 3. 单向手动同步（dhub-uploader）
 
-多端 Agent 把本地资产**自动增量上传**到云 D-Hub。方向是**单向 push**——下载由 Agent 通过 MCP 工具（`dhub_session_get`、`dhub_memory_search` 等）按需主动拉取，不做反向实时同步。
+多端 Agent 把本地资产**手动推送**到云 D-Hub。方向是**单向 push**——下载由 Agent 通过 MCP 工具（`dhub_session_get`、`dhub_memory_search` 等）按需主动拉取，不做反向实时同步。
+
+每次运行扫描一次即退出，无守护进程、无轮询。想同步时手动跑一条命令即可。
 
 支持的源：
 
@@ -299,19 +301,17 @@ dhub-agent-sync .dhub/dhub-agent.json
 | `generic` | 任意目录（`--dir`） | 会话 + 记忆 |
 
 ```bash
-# 一次性同步（cron 友好）
+# 手动同步一次（扫描后退出）
 dhub-uploader --source minis --url http://<d-hub>:10101 \
-  --api-key <admin-key> --namespace agents/minis --agent-id minis --mode once
-
-# 持续监听（默认，每 60 秒轮询增量）
-dhub-uploader --source claude --url http://<d-hub>:10101 \
-  --api-key <admin-key> --namespace agents/claude-dev --mode watch
+  --api-key <admin-key> --namespace agents/minis --agent-id minis
 ```
 
-增量策略：
-- 会话转录**按行追加**（只上传新消息，重启续传不重复）
+增量策略（重跑不重复）：
+- 会话转录**按行追加**（只上传新消息）
 - 记忆**按内容哈希判重**（不变不重传）
 - 状态文件记录映射，默认 `~/.dhub-uploader-state.json`
+
+如果需要定时，交给 cron / systemd timer 自行调度（`dhub-uploader` 本身只做单次同步）。
 
 ### 原生 MCP 工具
 
@@ -377,7 +377,7 @@ dhub-uploader --source claude --url http://<d-hub>:10101 \
 | 技能仓库 | 文件系统 | 三层目录：global / agents / projects |
 | 文件共享 | 文件系统 | 三层目录：global / agents / projects |
 | 会话转录 | 文件系统 | JSON 元数据 + JSONL 消息流，三层目录 |
-| 自动上传 | `dhub-uploader` CLI | 单向 push，增量同步本地资产 |
+| 手动同步 | `dhub-uploader` CLI | 单向 push，单次扫描增量同步 |
 | Dashboard | FastAPI 静态文件 | 内嵌在 D-Hub |
 | 数据库 | PostgreSQL + pgvector | 系统 apt 安装，仅 localhost |
 | 同步 | systemd timer | 定时运行记忆 ↔ Wiki 语义同步 |

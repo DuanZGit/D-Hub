@@ -1,8 +1,11 @@
-"""Single-direction auto-uploader: local agent assets -> cloud D-Hub.
+"""Single-direction manual sync: local agent assets -> cloud D-Hub.
 
 Direction is strictly ONE-WAY (push only). Download is intentionally left to
 the agent itself, which pulls memories/sessions on demand via the native MCP
 tools (dhub_session_get, dhub_memory_search, ...).
+
+Run manually whenever you want to sync — it scans once and exits. No daemon,
+no polling, no watch loop.
 
 Supported sources (--source):
   claude   ~/.claude/projects/<encoded>/<session>.jsonl  (transcripts)
@@ -10,15 +13,11 @@ Supported sources (--source):
   minis    /var/minis/memory/*.md                        (memory log)
   generic  any directory of *.jsonl / *.md (--dir)
 
-Run modes:
-  --once      scan once and exit (cron friendly)
-  --watch     poll continuously (default, --interval seconds)
-
 Incremental strategy:
   * session transcripts append only new lines past the recorded offset.
   * memories re-upload only when their content hash changes.
   A local state file maps source keys -> remote session ids / hashes so that a
-  restart resumes without duplicates.
+  rerun resumes without duplicates.
 """
 
 from __future__ import annotations
@@ -28,7 +27,6 @@ import hashlib
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 from .agent_sync import HubClient
@@ -349,7 +347,7 @@ def build_source(args) -> Source:
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="One-way auto-uploader: local agent assets -> cloud D-Hub."
+        description="One-way manual sync: push local agent assets to cloud D-Hub once."
     )
     parser.add_argument(
         "--source",
@@ -367,10 +365,6 @@ def build_parser():
     parser.add_argument("--namespace", default=os.getenv("DHUB_NAMESPACE", "global"))
     parser.add_argument("--agent-id", default=os.getenv("DHUB_AGENT_ID", ""))
     parser.add_argument("--state", default=str(DEFAULT_STATE))
-    parser.add_argument(
-        "--mode", default="watch", choices=["once", "watch"]
-    )
-    parser.add_argument("--interval", type=int, default=int(os.getenv("DHUB_UPLOADER_INTERVAL", "60")))
     return parser
 
 
@@ -380,25 +374,14 @@ def main(argv=None):
     source = build_source(args)
     uploader = Uploader(client, Path(args.state), args.namespace)
     os.environ.setdefault("DHUB_AGENT_ID", args.agent_id)
+    items = source.scan()
     try:
-        while True:
-            items = source.scan()
-            try:
-                result = uploader.run(items)
-            except RuntimeError as exc:
-                print(f"dhub-uploader: upload failed: {exc}", file=sys.stderr)
-                if args.mode == "once":
-                    return 1
-                time.sleep(args.interval)
-                continue
-            print(
-                json.dumps({"status": "ok", **result}, ensure_ascii=False)
-            )
-            if args.mode == "once":
-                return 0
-            time.sleep(args.interval)
-    except KeyboardInterrupt:
-        return 0
+        result = uploader.run(items)
+    except RuntimeError as exc:
+        print(f"dhub-uploader: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps({"status": "ok", **result}, ensure_ascii=False))
+    return 0
 
 
 if __name__ == "__main__":
