@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "d-hub"
-version = "0.2.0"
+version = "0.3.0"
 description = "D-Hub: one-process multi-agent coordination layer"
 requires-python = ">=3.10"
 dependencies = [
@@ -22,6 +22,7 @@ test = ["pytest>=8", "pytest-asyncio>=0.23"]
 
 [project.scripts]
 dhub-agent-sync = "dhub.agent_sync:main"
+dhub-uploader = "dhub.uploader:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

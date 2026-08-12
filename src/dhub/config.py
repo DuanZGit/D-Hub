@@ -27,7 +27,7 @@ PORT = int(os.getenv("DHUB_PORT", "10101"))
 try:
     VERSION = version("d-hub")
 except PackageNotFoundError:
-    VERSION = "0.2.0"
+    VERSION = "0.3.0"
 TIERS = ("global", "agents", "projects")
 TYPES = ("mcp", "skills", "wiki", "files", "sessions")
 _LOCAL_LOCKS: dict[str, threading.RLock] = {}
