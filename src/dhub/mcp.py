@@ -4,20 +4,53 @@ import asyncio
 import json
 import os
 import shlex
+import threading
 import time
 from typing import Any
 
 import httpx
 
-from .config import merged_json
+from .config import VERSION, merged_json
 
 
 class McpRouter:
     """Resolve tiered MCP configs and proxy JSON-RPC calls."""
 
-    def __init__(self, cache_ttl: float = 120):
+    def __init__(self, cache_ttl: float = 120, session_ttl: float = 3600):
         self.cache_ttl = cache_ttl
+        self.session_ttl = session_ttl
         self.cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self.http_sessions: dict[str, tuple[float, str | None]] = {}
+        self.http_session_locks: dict[str, asyncio.Lock] = {}
+        self._session_generation = 0
+        self._session_state_lock = threading.Lock()
+
+    def clear(self):
+        self.cache.clear()
+        with self._session_state_lock:
+            self._session_generation += 1
+            self.http_sessions.clear()
+            self.http_session_locks = {
+                key: lock
+                for key, lock in self.http_session_locks.items()
+                if lock.locked()
+            }
+
+    def _prune_http_sessions(self):
+        cutoff = time.monotonic() - self.session_ttl
+        with self._session_state_lock:
+            expired = [
+                key
+                for key, (last_used, _) in self.http_sessions.items()
+                if last_used < cutoff
+            ]
+            for key in expired:
+                self.http_sessions.pop(key, None)
+            self.http_session_locks = {
+                key: lock
+                for key, lock in self.http_session_locks.items()
+                if lock.locked() or key in self.http_sessions
+            }
 
     def configs(self, agent_id: str | None = None, project: str | None = None):
         return merged_json("mcp", agent_id, project)[0]
@@ -61,6 +94,7 @@ class McpRouter:
                     if raw_name.startswith("rmcp__")
                     else f"rmcp__{server_id}__{raw_name}"
                 )
+                item.setdefault("inputSchema", {"type": "object", "properties": {}})
                 item["server"] = server_id
                 tools.append(item)
         return {"tools": tools}
@@ -71,7 +105,7 @@ class McpRouter:
             raise ValueError("MCP tool must use rmcp__server__tool name")
         server_id, tool_name = parts[1:]
         config = self.configs(agent_id, project).get(server_id)
-        if not config:
+        if not config or config.get("enabled", True) is False:
             raise KeyError("MCP server not found")
         return await self._rpc(
             config, "tools/call", {"name": tool_name, "arguments": arguments or {}}
@@ -87,15 +121,119 @@ class McpRouter:
         headers = self._headers(config.get("headers") or {})
         if config.get("transport", "http") == "stdio":
             return await self._stdio_rpc(config, payload)
-        async with httpx.AsyncClient(
-            timeout=float(config.get("timeout", 30))
-        ) as client:
-            response = await client.post(config["url"], json=payload, headers=headers)
-            response.raise_for_status()
-            data = response.json()
+        data = await self._http_rpc(config, payload, headers)
         if "error" in data:
             raise RuntimeError(str(data["error"]))
         return data.get("result", data)
+
+    async def _http_rpc(self, config, payload, headers):
+        url = config.get("url")
+        if not url:
+            raise ValueError("HTTP MCP config requires url")
+        session_key = json.dumps([url, headers], sort_keys=True)
+        self._prune_http_sessions()
+        with self._session_state_lock:
+            generation = self._session_generation
+            lock = self.http_session_locks.setdefault(session_key, asyncio.Lock())
+        async with lock:
+            async with httpx.AsyncClient(
+                timeout=float(config.get("timeout", 30))
+            ) as client:
+                with self._session_state_lock:
+                    existing = self.http_sessions.get(session_key)
+                session_id = existing[1] if existing else None
+                if existing is None:
+                    session_id = await self._initialize_http_session(
+                        client, url, headers
+                    )
+                response = await self._http_post(
+                    client,
+                    url,
+                    payload,
+                    headers,
+                    session_id,
+                )
+                if response.status_code == 404:
+                    with self._session_state_lock:
+                        self.http_sessions.pop(session_key, None)
+                    session_id = await self._initialize_http_session(
+                        client, url, headers
+                    )
+                    response = await self._http_post(
+                        client,
+                        url,
+                        payload,
+                        headers,
+                        session_id,
+                    )
+                response.raise_for_status()
+                with self._session_state_lock:
+                    if generation == self._session_generation:
+                        self.http_sessions[session_key] = (
+                            time.monotonic(),
+                            session_id,
+                        )
+                return self._decode_http_response(response, payload.get("id"))
+
+    async def _initialize_http_session(self, client, url, headers):
+        initialize = {
+            "jsonrpc": "2.0",
+            "id": int(time.time() * 1000) % 1_000_000_000,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": {"name": "d-hub", "version": VERSION},
+            },
+        }
+        response = await self._http_post(client, url, initialize, headers, None)
+        response.raise_for_status()
+        data = self._decode_http_response(response, initialize["id"])
+        if "error" in data:
+            raise RuntimeError(str(data["error"]))
+        session_id = response.headers.get("Mcp-Session-Id")
+        notification = {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "params": {},
+        }
+        notified = await self._http_post(
+            client, url, notification, headers, session_id
+        )
+        notified.raise_for_status()
+        return session_id
+
+    @staticmethod
+    async def _http_post(client, url, payload, headers, session_id):
+        request_headers = {
+            "Accept": "application/json, text/event-stream",
+            **headers,
+        }
+        if session_id:
+            request_headers["Mcp-Session-Id"] = session_id
+        return await client.post(url, json=payload, headers=request_headers)
+
+    @staticmethod
+    def _decode_http_response(response, request_id):
+        content_type = response.headers.get("content-type", "").lower()
+        if "text/event-stream" not in content_type:
+            return response.json()
+        events = []
+        data_lines = []
+        for line in response.text.splitlines():
+            if line.startswith("data:"):
+                data_lines.append(line[5:].lstrip())
+            elif not line and data_lines:
+                events.append(json.loads("\n".join(data_lines)))
+                data_lines = []
+        if data_lines:
+            events.append(json.loads("\n".join(data_lines)))
+        for event in events:
+            if event.get("id") == request_id:
+                return event
+        if events:
+            return events[-1]
+        raise ValueError("HTTP MCP returned no JSON-RPC response")
 
     @staticmethod
     def _headers(headers):

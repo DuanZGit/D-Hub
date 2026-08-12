@@ -5,7 +5,13 @@
 - 基础 URL：`http://192.168.5.242:10101`
 - 请求格式：JSON
 - 响应格式：JSON
-- 认证：当前无（局域网）
+- 认证：新安装默认启用 API key。除 `/`、`/ui`、`/health` 和 API 文档外，
+  使用 `Authorization: Bearer <DHUB_API_KEY>` 或 `X-API-Key` 请求头。
+
+```bash
+export DHUB_API_KEY="<安装脚本输出的密钥>"
+curl -H "Authorization: Bearer $DHUB_API_KEY" http://192.168.5.242:10101/agents
+```
 
 ## 1. Agent 注册
 
@@ -42,9 +48,9 @@
 ```json
 {
   "tools": [
-    {"name": "memory_search", "description": "搜索记忆", ...},
-    {"name": "wiki_search", "description": "搜索 Wiki", ...},
-    {"name": "code_review", "description": "代码审查（来自 project 层）", ...}
+    {"name": "rmcp__memory__memory_search", "description": "搜索记忆", ...},
+    {"name": "rmcp__wiki__wiki_search", "description": "搜索 Wiki", ...},
+    {"name": "rmcp__review__code_review", "description": "代码审查（来自 project 层）", ...}
   ]
 }
 ```
@@ -58,7 +64,7 @@
 {
   "agent_id": "minis",
   "project": "project-a",
-  "name": "memory_search",
+  "name": "rmcp__memory__memory_search",
   "arguments": {"query": "最近的项目决策", "limit": 5}
 }
 ```

@@ -1,0 +1,10 @@
+[Unit]
+Description=Synchronize d-hub memory and Wiki every four hours
+
+[Timer]
+OnBootSec=10m
+OnUnitActiveSec=4h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -4,7 +4,7 @@ import os
 import threading
 import uuid
 
-from .config import ROOT, atomic_json, now, read_json
+from .config import ROOT, atomic_json, mutation_lock, now, read_json
 
 
 class MemoryStore:
@@ -90,9 +90,10 @@ class MemoryStore:
     def add(self, namespace, agent_id, content, metadata=None, infer=True):
         uid = self.user_id(namespace, agent_id)
         if self.memory:
-            out = self.memory.add(
-                content, user_id=uid, metadata=metadata or {}, infer=infer
-            )
+            with mutation_lock("memory"):
+                out = self.memory.add(
+                    content, user_id=uid, metadata=metadata or {}, infer=infer
+                )
             rows = out.get("results", [])
             return {
                 "status": "ok",
@@ -100,7 +101,7 @@ class MemoryStore:
                 "backend": self.backend,
                 "results": rows,
             }
-        with self.lock:
+        with self.lock, mutation_lock("memory"):
             rows = read_json(self.path, []) or []
             item = {
                 "id": str(uuid.uuid4()),
@@ -146,9 +147,10 @@ class MemoryStore:
 
     def delete(self, memory_id):
         if self.memory:
-            self.memory.delete(memory_id)
+            with mutation_lock("memory"):
+                self.memory.delete(memory_id)
             return True
-        with self.lock:
+        with self.lock, mutation_lock("memory"):
             rows = read_json(self.path, []) or []
             new = [x for x in rows if x.get("id") != memory_id]
             atomic_json(self.path, new)

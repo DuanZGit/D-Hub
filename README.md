@@ -5,6 +5,9 @@
 d-hub = 一个 Python 进程（:10101）+ 一个 PostgreSQL（:5432）。  
 记忆、Wiki、MCP、技能、文件、Agent 路由、Dashboard，全在一个进程里。
 
+Dashboard：`http://<服务器>:10101/ui`。根地址会自动跳转到 Dashboard；
+`deploy/install.sh` 会生成 `DHUB_API_KEY`，管理台和客户端使用该密钥访问业务 API。
+
 ## 设计原则
 
 1. **单进程**：d-hub 一个 Python 进程搞定所有协调
@@ -13,7 +16,7 @@ d-hub = 一个 Python 进程（:10101）+ 一个 PostgreSQL（:5432）。
 4. **读时合并**：MCP、Skills 配置每次请求实时合并，无缓存、无 cron
 5. **Wiki git 化**：Markdown 文件 + 自动 commit，可回滚
 6. **非 Docker**：原生 Python，systemd 管理
-7. **cron 只做语义同步**：记忆 ↔ Wiki 提炼（LLM 处理）
+7. **定时任务只做语义同步**：记忆 ↔ Wiki 提炼（LLM 处理）
 
 ## 技术栈
 
@@ -27,7 +30,7 @@ d-hub = 一个 Python 进程（:10101）+ 一个 PostgreSQL（:5432）。
 | 文件共享 | 文件系统 | 三层目录：global / agents / projects |
 | Dashboard | FastAPI 静态文件 | 内嵌在 d-hub |
 | 数据库 | PostgreSQL + pgvector | 系统 apt 安装，仅 localhost |
-| 同步 | cron | 定时同步 MCP/Skills/Wiki 配置 |
+| 同步 | systemd timer | 定时运行记忆 ↔ Wiki 语义同步 |
 
 ## 架构
 
@@ -128,10 +131,10 @@ Agent → POST /wiki/page {namespace, title, content}
 
 ## 同步机制（只有一种）
 
-不是所有资产都需要同步。只有需要 LLM 处理的**语义同步**才需要 cron：
+不是所有资产都需要同步。只有需要 LLM 处理的**语义同步**才需要定时任务：
 
 ```
-cron 每 4 小时：
+systemd timer 每 4 小时：
   记忆共识层（global:shared）
     → LLM 提取精华
     → 生成/更新 Wiki 共识页面

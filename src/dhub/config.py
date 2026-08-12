@@ -2,19 +2,36 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import re
 import tempfile
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
+
+try:
+    import msvcrt
+except ImportError:  # POSIX
+    msvcrt = None
 
 ROOT = Path(os.getenv("DHUB_ROOT", "/opt/d-hub"))
 PORT = int(os.getenv("DHUB_PORT", "10101"))
-VERSION = "0.1.0"
+try:
+    VERSION = version("d-hub")
+except PackageNotFoundError:
+    VERSION = "0.1.0"
 TIERS = ("global", "agents", "projects")
 TYPES = ("mcp", "skills", "wiki", "files")
+_LOCAL_LOCKS: dict[str, threading.RLock] = {}
+_LOCAL_LOCKS_GUARD = threading.Lock()
 
 
 def now():
@@ -46,6 +63,7 @@ def ensure_layout(root=ROOT):
         root / "data",
         root / "logs",
         root / "backups",
+        root / ".locks",
         root / "scripts",
         root / "ui",
     ):
@@ -54,18 +72,49 @@ def ensure_layout(root=ROOT):
 
 class file_lock:
     def __init__(self, name: str):
-        self.path = ROOT / "data" / "locks" / (safe_part(name) + ".lock")
+        self.path = ROOT / ".locks" / (safe_part(name) + ".lock")
         self.stream = None
+        with _LOCAL_LOCKS_GUARD:
+            self.local_lock = _LOCAL_LOCKS.setdefault(str(self.path), threading.RLock())
 
     def __enter__(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.stream = self.path.open("a+")
-        fcntl.flock(self.stream.fileno(), fcntl.LOCK_EX)
-        return self
+        self.local_lock.acquire()
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.stream = self.path.open("a+b")
+            if fcntl is not None:
+                fcntl.flock(self.stream.fileno(), fcntl.LOCK_EX)
+            elif msvcrt is not None:
+                self.stream.seek(0, os.SEEK_END)
+                if self.stream.tell() == 0:
+                    self.stream.write(b"\0")
+                    self.stream.flush()
+                self.stream.seek(0)
+                msvcrt.locking(self.stream.fileno(), msvcrt.LK_LOCK, 1)
+            return self
+        except Exception:
+            if self.stream is not None:
+                self.stream.close()
+            self.local_lock.release()
+            raise
 
     def __exit__(self, *_):
-        fcntl.flock(self.stream.fileno(), fcntl.LOCK_UN)
-        self.stream.close()
+        try:
+            if fcntl is not None:
+                fcntl.flock(self.stream.fileno(), fcntl.LOCK_UN)
+            elif msvcrt is not None:
+                self.stream.seek(0)
+                msvcrt.locking(self.stream.fileno(), msvcrt.LK_UNLCK, 1)
+            self.stream.close()
+        finally:
+            self.local_lock.release()
+
+
+@contextmanager
+def mutation_lock(name: str):
+    """Serialize persisted-data mutations with backup and restore snapshots."""
+    with file_lock("assets"), file_lock(name):
+        yield
 
 
 def atomic_bytes(path: Path, value: bytes):
