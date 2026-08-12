@@ -30,14 +30,16 @@ def test_mcp_config_can_be_managed_and_immediately_merged(client):
     )
     assert response.status_code == 200
     tools = client.post("/mcp/tools/list", json={}).json()["tools"]
-    assert tools[0]["name"] == "rmcp__local__echo"
+    assert any(tool["name"] == "rmcp__local__echo" for tool in tools)
     assert (
         client.delete(
             "/mcp/configs", params={"namespace": "global", "server_id": "local"}
         ).status_code
         == 200
     )
-    assert client.post("/mcp/tools/list", json={}).json()["tools"] == []
+    remaining = client.post("/mcp/tools/list", json={}).json()["tools"]
+    assert not any(tool["name"].startswith("rmcp__local__") for tool in remaining)
+    assert any(tool["name"] == "dhub_memory_search" for tool in remaining)
 
 
 def test_skill_management_respects_project_override(client):

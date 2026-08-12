@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import tarfile
@@ -33,9 +34,14 @@ class AgentRegistry:
 
     def register(self, data):
         agent_id = safe_part(data.get("agent_id"))
+        issued_key = None
         with mutation_lock("agents"):
             agents = self.all()
             previous = agents.get(agent_id, {})
+            key_hash = previous.get("api_key_hash")
+            if not key_hash:
+                issued_key = secrets.token_urlsafe(32)
+                key_hash = hashlib.sha256(issued_key.encode()).hexdigest()
             item = {
                 **previous,
                 **data,
@@ -43,16 +49,41 @@ class AgentRegistry:
                 "enabled": data.get("enabled", previous.get("enabled", True)),
                 "registered_at": previous.get("registered_at", now()),
                 "last_seen": now(),
+                "api_key_hash": key_hash,
             }
             agents[agent_id] = item
             atomic_json(self.path, agents)
-        return item
+        public = {key: value for key, value in item.items() if key != "api_key_hash"}
+        if issued_key:
+            public["api_key"] = issued_key
+        return public
 
     def get(self, agent_id):
         item = self.all().get(agent_id)
         if not item:
             raise KeyError(agent_id)
         return item
+
+    def authenticate(self, agent_id, api_key, project=None):
+        try:
+            item = self.get(safe_part(agent_id))
+        except (KeyError, ValueError):
+            return False
+        expected = item.get("api_key_hash", "")
+        supplied = hashlib.sha256(str(api_key or "").encode()).hexdigest()
+        if not expected or not secrets.compare_digest(expected, supplied):
+            return False
+        return self.context_allowed(item, project)
+
+    @staticmethod
+    def context_allowed(item, project=None):
+        if item.get("enabled", True) is False:
+            return False
+        return not project or project in (item.get("projects") or [])
+
+    @staticmethod
+    def public(item):
+        return {key: value for key, value in item.items() if key != "api_key_hash"}
 
     def delete(self, agent_id):
         agent_id = safe_part(agent_id)

@@ -1,0 +1,8 @@
+{
+  "name": "local-tools",
+  "transport": "http",
+  "url": "http://192.168.5.101:9000/mcp",
+  "headers": {
+    "Authorization": "Bearer $LOCAL_TOOLS_API_KEY"
+  }
+}

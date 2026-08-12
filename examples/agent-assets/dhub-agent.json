@@ -1,0 +1,44 @@
+{
+  "agent_id": "codex",
+  "host": "developer-workstation",
+  "callback_url": null,
+  "projects": ["project-a"],
+  "assets": {
+    "mcp": [
+      {
+        "namespace": "agents/{agent_id}",
+        "server_id": "local-tools",
+        "path": "mcp/local-tools.json"
+      }
+    ],
+    "skills": [
+      {
+        "namespace": "agents/{agent_id}",
+        "name": "project-workflow",
+        "path": "skills/project-workflow/SKILL.md"
+      }
+    ],
+    "prompts": [
+      {
+        "namespace": "projects/{project}",
+        "target": "wiki",
+        "title": "agent-context",
+        "path": "prompts/agent-context.md"
+      }
+    ],
+    "wiki": [
+      {
+        "namespace": "projects/{project}",
+        "title": "architecture-notes",
+        "path": "wiki/architecture-notes.md"
+      }
+    ],
+    "files": [
+      {
+        "namespace": "projects/{project}",
+        "path": "files/tooling.json",
+        "target": "tooling.json"
+      }
+    ]
+  }
+}

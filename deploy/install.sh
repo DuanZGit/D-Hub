@@ -16,10 +16,13 @@ python3 -m venv "$ROOT/.venv"
 cp -r "$SRC/scripts/." "$ROOT/scripts/"
 chmod +x "$ROOT/scripts/"*.sh "$ROOT/scripts/"*.py
 [ -f "$ROOT/config/dhub.env" ] || cp "$SRC/deploy/dhub.env.example" "$ROOT/config/dhub.env"
-DHUB_EFFECTIVE_KEY=$(sed -n 's/^DHUB_API_KEY=//p' "$ROOT/config/dhub.env" | tail -n 1)
+DHUB_EFFECTIVE_KEY=$(sed -n 's/^DHUB_ADMIN_KEY=//p' "$ROOT/config/dhub.env" | tail -n 1)
+if [ -z "$DHUB_EFFECTIVE_KEY" ]; then
+  DHUB_EFFECTIVE_KEY=$(sed -n 's/^DHUB_API_KEY=//p' "$ROOT/config/dhub.env" | tail -n 1)
+fi
 if [ -z "$DHUB_EFFECTIVE_KEY" ]; then
   DHUB_GENERATED_KEY=$("$ROOT/.venv/bin/python" -c 'import secrets; print(secrets.token_urlsafe(32))')
-  printf '\nDHUB_API_KEY=%s\n' "$DHUB_GENERATED_KEY" >> "$ROOT/config/dhub.env"
+  printf '\nDHUB_ADMIN_KEY=%s\n' "$DHUB_GENERATED_KEY" >> "$ROOT/config/dhub.env"
 fi
 chmod 600 "$ROOT/config/dhub.env"
 for unit in dhub-backup.service dhub-backup.timer dhub-sync.service dhub-sync.timer; do
@@ -38,5 +41,7 @@ until curl -fsS "$DHUB_LOCAL_URL/health"; do
   sleep 1
 done
 curl -fsS -o /dev/null "$DHUB_LOCAL_URL/"
-printf '\nDashboard: %s/\nAPI key: %s\n' "$DHUB_LOCAL_URL" "$(sed -n 's/^DHUB_API_KEY=//p' "$ROOT/config/dhub.env" | tail -n 1)"
+DHUB_EFFECTIVE_KEY=$(sed -n 's/^DHUB_ADMIN_KEY=//p' "$ROOT/config/dhub.env" | tail -n 1)
+DHUB_EFFECTIVE_KEY=${DHUB_EFFECTIVE_KEY:-$(sed -n 's/^DHUB_API_KEY=//p' "$ROOT/config/dhub.env" | tail -n 1)}
+printf '\nDashboard: %s/\nAdmin key: %s\n' "$DHUB_LOCAL_URL" "$DHUB_EFFECTIVE_KEY"
 sudo chown -R "$SERVICE_USER:$SERVICE_GROUP" "$ROOT"

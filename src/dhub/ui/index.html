@@ -12,11 +12,11 @@
 </head>
 <body>
   <a class="skip" href="#app">跳到主要内容</a>
-  <header class="topbar"><div class="brand"><strong>d-hub</strong><span>Multi-Agent Coordination Layer</span></div><div class="status"><i id="health-dot" class="dot"></i><span id="health-label">正在连接</span><button type="button" onclick="setApiKey()">访问密钥</button></div></header>
+  <header class="topbar"><div class="brand"><strong>d-hub</strong><span>Multi-Agent Coordination Layer</span></div><div class="status"><i id="health-dot" class="dot"></i><span id="health-label">正在连接</span><button type="button" onclick="setApiKey()">管理密钥</button></div></header>
   <nav id="nav" aria-label="主导航"></nav>
   <main id="app" tabindex="-1"></main>
   <div id="notice" class="notice hidden" role="status" aria-live="polite"></div>
-  <dialog id="key-dialog"><form id="key-form"><h2>访问密钥</h2><p class="muted">密钥只保存在当前浏览器标签页中。</p><label>DHUB_API_KEY</label><input name="api_key" type="password" autocomplete="current-password"><div class="row"><button class="primary">应用</button><button type="button" onclick="$('#key-dialog').close()">取消</button><button type="button" class="danger" onclick="clearApiKey()">清除</button></div></form></dialog>
+  <dialog id="key-dialog"><form id="key-form"><h2>管理密钥</h2><p class="muted">密钥只保存在当前浏览器标签页中。</p><label>DHUB_ADMIN_KEY</label><input name="api_key" type="password" autocomplete="current-password"><div class="row"><button class="primary">应用</button><button type="button" onclick="$('#key-dialog').close()">取消</button><button type="button" class="danger" onclick="clearApiKey()">清除</button></div></form></dialog>
   <script>
     const tabs=[['overview','总览'],['agents','Agent'],['mcp','MCP'],['memory','记忆'],['wiki','Wiki'],['skills','技能'],['files','文件'],['sync','同步'],['logs','日志'],['config','配置'],['backup','备份']];
     const descriptions={overview:'服务运行状态与模块概览',agents:'注册、查看和移除 Agent',mcp:'管理分层上游并查看合并结果',memory:'浏览、写入和搜索隔离记忆',wiki:'维护 Markdown 知识页面',skills:'管理三层技能仓库',files:'上传、下载和清理共享文件',sync:'运行记忆与 Wiki 语义同步',logs:'查看最近审计事件',config:'核对当前运行配置',backup:'创建和恢复数据备份'};

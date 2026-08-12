@@ -7,6 +7,9 @@
 - FastAPI 单进程服务，端口 10101
 - Agent 注册与 HTTP 代理调用
 - MCP 三级配置实时合并、Streamable HTTP/stdio JSON-RPC 转发、远程工具 120 秒缓存
+- d-hub Memory/Wiki/Skills/Files 原生 MCP 工具
+- Agent manifest 注册与 MCP/Skill/提示词/Wiki/File 声明式同步 CLI
+- Admin/Agent 分离密钥，MCP 身份和项目声明服务端校验
 - 记忆命名空间与 mem0/pgvector 适配；缺模型配置时 JSON 降级
 - Wiki Markdown CRUD、Whoosh 中英文全文索引、Git 自动提交与历史
 - Skills 三级覆盖与增删改查

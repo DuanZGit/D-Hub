@@ -3,8 +3,8 @@ from __future__ import annotations
 import hmac
 import os
 import subprocess
-import time
 import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -31,21 +31,23 @@ from .config import (
 from .files import NamespaceFiles, SkillStore
 from .mcp import McpRouter
 from .memory import MemoryStore
+from .native_mcp import NativeMcpTools
 from .services import AppState, SemanticSync, backup, restore
 from .wiki import WikiStore
 
 ensure_layout()
-state, memory, wiki, mcp = AppState(), MemoryStore(), WikiStore(), McpRouter()
+state, memory, wiki = AppState(), MemoryStore(), WikiStore()
 files, skills = NamespaceFiles(), SkillStore()
+mcp = McpRouter(native=NativeMcpTools(memory, wiki, skills, files))
 sync = SemanticSync(memory, wiki)
 app = FastAPI(
     title="d-hub", version=VERSION, description="Multi-agent coordination layer"
 )
 MCP_PROTOCOL_VERSION = "2025-03-26"
 MCP_SESSION_TTL_SECONDS = int(os.getenv("DHUB_MCP_SESSION_TTL_SECONDS", "86400"))
-mcp_sessions: dict[str, tuple[float, str | None, str | None]] = {}
+mcp_sessions: dict[str, tuple[float, str | None, str | None, bool]] = {}
 mcp_sessions_lock = threading.Lock()
-API_KEY = os.getenv("DHUB_API_KEY")
+ADMIN_KEY = os.getenv("DHUB_ADMIN_KEY") or os.getenv("DHUB_API_KEY")
 
 
 class RegisterIn(BaseModel):
@@ -117,7 +119,13 @@ async def request_metrics(request: Request, call_next):
     authorization = request.headers.get("Authorization", "")
     bearer = authorization[7:] if authorization.lower().startswith("bearer ") else ""
     supplied_key = bearer or request.headers.get("X-API-Key", "")
-    if API_KEY and not public and not hmac.compare_digest(supplied_key, API_KEY):
+    mcp_request = request.url.path == "/mcp"
+    if (
+        ADMIN_KEY
+        and not public
+        and not mcp_request
+        and not hmac.compare_digest(supplied_key, ADMIN_KEY)
+    ):
         state.audit.write(
             "http",
             False,
@@ -168,7 +176,7 @@ def health():
         **state.health(),
         "memory_backend": memory.backend,
         "memory_error": memory.error,
-        "authentication": "enabled" if API_KEY else "disabled",
+        "authentication": "enabled" if ADMIN_KEY else "disabled",
     }
 
 
@@ -179,7 +187,9 @@ def register(body: RegisterIn):
 
 @app.get("/agents")
 def agents():
-    return {"agents": list(state.registry.all().values())}
+    return {
+        "agents": [state.registry.public(item) for item in state.registry.all().values()]
+    }
 
 
 @app.delete("/agents/{agent_id}")
@@ -222,16 +232,25 @@ def mcp_session_get(session_id: str | None):
     with mcp_sessions_lock:
         expired = [
             existing
-            for existing, (last_seen, _, _) in mcp_sessions.items()
+            for existing, (last_seen, _, _, _) in mcp_sessions.items()
             if now - last_seen > MCP_SESSION_TTL_SECONDS
         ]
         for existing in expired:
             mcp_sessions.pop(existing, None)
         if not session_id or session_id not in mcp_sessions:
             return None
-        _, agent_id, project = mcp_sessions[session_id]
-        mcp_sessions[session_id] = (now, agent_id, project)
-        return agent_id, project
+        _, agent_id, project, is_admin = mcp_sessions[session_id]
+        if not is_admin:
+            try:
+                agent = state.registry.get(agent_id)
+            except KeyError:
+                mcp_sessions.pop(session_id, None)
+                return None
+            if not state.registry.context_allowed(agent, project):
+                mcp_sessions.pop(session_id, None)
+                return None
+        mcp_sessions[session_id] = (now, agent_id, project, is_admin)
+        return agent_id, project, is_admin
 
 
 @app.post("/mcp", include_in_schema=False)
@@ -259,9 +278,26 @@ async def streamable_mcp(
             return mcp_response(
                 None, error={"code": -32600, "message": "Invalid Request"}
             )
+        authorization = request.headers.get("Authorization", "")
+        bearer = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        supplied_key = bearer or request.headers.get("X-API-Key", "")
+        is_admin = bool(ADMIN_KEY and hmac.compare_digest(supplied_key, ADMIN_KEY))
+        if ADMIN_KEY and not is_admin and not state.registry.authenticate(
+            agent_id, supplied_key, project
+        ):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "valid agent or admin key required"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         session_id = uuid.uuid4().hex
         with mcp_sessions_lock:
-            mcp_sessions[session_id] = (time.monotonic(), agent_id, project)
+            mcp_sessions[session_id] = (
+                time.monotonic(),
+                agent_id,
+                project,
+                is_admin,
+            )
         requested_version = params.get("protocolVersion")
         protocol_version = (
             MCP_PROTOCOL_VERSION
@@ -291,7 +327,7 @@ async def streamable_mcp(
             },
             status_code=404,
         )
-    agent_id, project = context
+    agent_id, project, is_admin = context
     if request_id is None:
         return Response(status_code=202)
     try:
@@ -305,6 +341,7 @@ async def streamable_mcp(
                 params.get("arguments") or {},
                 agent_id,
                 project,
+                allow_global=is_admin,
             )
         else:
             return mcp_response(
@@ -313,6 +350,10 @@ async def streamable_mcp(
     except (KeyError, ValueError) as exc:
         return mcp_response(
             request_id, error={"code": -32602, "message": str(exc).strip("'")}
+        )
+    except PermissionError as exc:
+        return mcp_response(
+            request_id, error={"code": -32003, "message": str(exc)}
         )
     except (httpx.HTTPError, OSError, RuntimeError) as exc:
         return mcp_response(

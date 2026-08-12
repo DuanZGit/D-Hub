@@ -69,5 +69,5 @@ Agent 请求工具 X
 ```
 global:shared          → 共识层
 global:<agent_id>      → Agent 层
-global:<agent_id>:<project_id>  → Project 层
+global:project:<project_id>    → Project 层（项目内 Agent 共享）
 ```

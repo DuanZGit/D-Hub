@@ -26,7 +26,7 @@ sudo -u postgres psql -c "GRANT ALL ON DATABASE mem0 TO mem0;"
 
 ## 第二步：安装 d-hub
 
-在源码目录执行安装脚本。脚本会创建目录、安装当前项目包及依赖、生成 API key、写入 systemd unit，并启用定时器：
+在源码目录执行安装脚本。脚本会创建目录、安装当前项目包及依赖、生成 Admin key、写入 systemd unit，并启用定时器：
 
 ```bash
 sudo apt install python3-venv

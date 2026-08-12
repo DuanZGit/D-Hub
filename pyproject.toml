@@ -20,6 +20,9 @@ dependencies = [
 memory = ["mem0ai>=0.1"]
 test = ["pytest>=8", "pytest-asyncio>=0.23"]
 
+[project.scripts]
+dhub-agent-sync = "dhub.agent_sync:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

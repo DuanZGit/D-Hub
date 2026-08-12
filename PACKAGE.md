@@ -12,6 +12,7 @@
 | [PROTOCOLS.md](minis://workspace/d-hub/PROTOCOLS.md) | 全部 API 接口定义 |
 | [DEPLOYMENT.md](minis://workspace/d-hub/DEPLOYMENT.md) | 部署步骤（PostgreSQL + mem0ai + d-hub + systemd timer） |
 | [CLIENTS.md](minis://workspace/d-hub/CLIENTS.md) | 各 Agent 接入配置 |
+| [AGENT_INTEGRATION.md](minis://workspace/d-hub/AGENT_INTEGRATION.md) | Agent MCP 接入、资产 manifest 同步与提示词 |
 | [BACKUP.md](minis://workspace/d-hub/BACKUP.md) | 备份与恢复 |
 | [REFERENCES.md](minis://workspace/d-hub/REFERENCES.md) | **★ 实现参考汇总**：mem0 完整 API、mcp-switch 架构、PI-agent-wiki 语义编译、关键设计模式 |
 

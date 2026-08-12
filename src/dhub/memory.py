@@ -84,7 +84,7 @@ class MemoryStore:
         if tier == "agents":
             return f"global:{ident}"
         if tier == "projects":
-            return f"global:{agent_id}:{ident}"
+            return f"global:project:{ident}"
         raise ValueError("invalid memory namespace")
 
     def add(self, namespace, agent_id, content, metadata=None, infer=True):

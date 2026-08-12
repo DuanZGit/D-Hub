@@ -5,12 +5,12 @@
 - 基础 URL：`http://192.168.5.242:10101`
 - 请求格式：JSON
 - 响应格式：JSON
-- 认证：新安装默认启用 API key。除 `/`、`/ui`、`/health` 和 API 文档外，
-  使用 `Authorization: Bearer <DHUB_API_KEY>` 或 `X-API-Key` 请求头。
+- 认证：新安装默认启用 Admin key。除 `/`、`/ui`、`/health` 和 API 文档外，
+  管理 REST 使用 `DHUB_ADMIN_KEY`；MCP 使用绑定 Agent/项目的 Agent key。
 
 ```bash
-export DHUB_API_KEY="<安装脚本输出的密钥>"
-curl -H "Authorization: Bearer $DHUB_API_KEY" http://192.168.5.242:10101/agents
+export DHUB_ADMIN_KEY="<安装脚本输出的管理密钥>"
+curl -H "Authorization: Bearer $DHUB_ADMIN_KEY" http://192.168.5.242:10101/agents
 ```
 
 ## 1. Agent 注册
@@ -27,10 +27,15 @@ curl -H "Authorization: Bearer $DHUB_API_KEY" http://192.168.5.242:10101/agents
 ```
 
 ```json
-{"status":"ok","agent_id":"minis","registered_at":"2026-08-12T01:00:00Z"}
+{"status":"ok","agent_id":"minis","api_key":"<首次注册时返回一次>"}
 ```
 
 ## 2. MCP 路由
+
+标准客户端连接 `POST /mcp?agent_id=<id>&project=<id>`，完成 Streamable HTTP
+初始化后使用 `tools/list` 和 `tools/call`。工具列表包含 d-hub 原生 `dhub_*` 工具，
+以及三层合并后的上游 `rmcp__<server>__<tool>` 工具。原生工具及作用域见
+[AGENT_INTEGRATION.md](AGENT_INTEGRATION.md)。以下 REST 路由保留用于脚本和管理操作。
 
 ### POST /mcp/tools/list
 
