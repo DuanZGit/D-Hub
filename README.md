@@ -228,6 +228,55 @@ D-Hub 使用 systemd timer 管理定时任务：
 systemctl list-timers | grep dhub
 ```
 
+## Agent 接入
+
+Agent 通过两条通道接入 D-Hub：
+
+### 1. MCP（运行时通道）
+
+Agent 配置 Streamable HTTP MCP，连接 D-Hub 后可使用原生工具和上游工具。
+
+**配置示例**（Claude Code / Cursor 等客户端）：
+
+```json
+{
+  "mcpServers": {
+    "dhub": {
+      "url": "http://192.168.5.242:10101/mcp?agent_id=codex&project=project-a",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
+
+### 2. Manifest 同步（发布通道）
+
+Agent 启动时通过 Manifest 发布自己的 MCP 配置、Skill、Wiki 和文件。
+
+```bash
+# 安装 D-Hub Python 包
+pip install d-hub
+
+# 注册并发布资产
+dhub-agent-sync .dhub/dhub-agent.json
+```
+
+### 原生 MCP 工具
+
+连接后，D-Hub 自动提供以下工具：
+
+| 工具 | 用途 |
+|---|---|
+| `dhub_memory_search` | 搜索记忆 |
+| `dhub_memory_add` | 写入记忆 |
+| `dhub_wiki_search` | 搜索 Wiki |
+| `dhub_wiki_put` | 创建/更新 Wiki |
+| `dhub_skills_list` | 列出技能 |
+| `dhub_files_list` | 列出文件 |
+| `dhub_file_read` | 读取文件 |
+
+更多细节见 [AGENT_INTEGRATION.md](AGENT_INTEGRATION.md) 和 [examples/agent-assets](examples/agent-assets)。
+
 ### 目录结构
 
 ```
