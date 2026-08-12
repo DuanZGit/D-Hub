@@ -30,6 +30,20 @@ def authenticated_client(tmp_path, monkeypatch):
         yield c
 
 
+@pytest.fixture
+def agent_key_client(tmp_path, monkeypatch):
+    monkeypatch.setenv("DHUB_ROOT", str(tmp_path))
+    monkeypatch.setenv("DHUB_MEMORY_BACKEND", "json")
+    monkeypatch.setenv("DHUB_ADMIN_KEY", "admin-secret")
+    monkeypatch.delenv("DHUB_API_KEY", raising=False)
+    for name in list(sys.modules):
+        if name == "dhub" or name.startswith("dhub."):
+            del sys.modules[name]
+    app = importlib.import_module("dhub.app").app
+    with TestClient(app) as c:
+        yield c
+
+
 def test_health_and_dashboard_have_all_modules(client):
     health = client.get("/health")
     assert health.status_code == 200
@@ -75,6 +89,143 @@ def test_api_key_protects_non_public_routes(authenticated_client):
     assert authorized.status_code == 200
 
 
+def test_registration_returns_agent_key_once_and_hides_hash(authenticated_client):
+    headers = {"Authorization": "Bearer test-secret"}
+    first = authenticated_client.post(
+        "/register",
+        headers=headers,
+        json={"agent_id": "codex", "projects": ["alpha"]},
+    ).json()
+    second = authenticated_client.post(
+        "/register",
+        headers=headers,
+        json={"agent_id": "codex", "projects": ["alpha"]},
+    ).json()
+    listed = authenticated_client.get("/agents", headers=headers).json()["agents"]
+    assert first["api_key"]
+    assert "api_key" not in second
+    assert "api_key_hash" not in listed[0]
+
+
+def test_agent_key_only_authorizes_bound_mcp_project(authenticated_client):
+    admin = {"Authorization": "Bearer test-secret"}
+    key = authenticated_client.post(
+        "/register",
+        headers=admin,
+        json={"agent_id": "codex", "projects": ["alpha"]},
+    ).json()["api_key"]
+    agent = {"Authorization": f"Bearer {key}"}
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {"protocolVersion": "2025-03-26"},
+    }
+    allowed = authenticated_client.post(
+        "/mcp?agent_id=codex&project=alpha", headers=agent, json=payload
+    )
+    denied = authenticated_client.post(
+        "/mcp?agent_id=codex&project=beta", headers=agent, json=payload
+    )
+    management = authenticated_client.get("/agents", headers=agent)
+    assert allowed.status_code == 200
+    assert denied.status_code == 401
+    assert management.status_code == 401
+
+
+def test_disabled_agent_key_cannot_initialize_mcp(agent_key_client):
+    admin = {"Authorization": "Bearer admin-secret"}
+    key = agent_key_client.post(
+        "/register",
+        headers=admin,
+        json={"agent_id": "codex", "projects": ["alpha"]},
+    ).json()["api_key"]
+    agent_key_client.post(
+        "/register",
+        headers=admin,
+        json={"agent_id": "codex", "projects": ["alpha"], "enabled": False},
+    )
+    denied = agent_key_client.post(
+        "/mcp?agent_id=codex&project=alpha",
+        headers={"Authorization": f"Bearer {key}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-03-26"},
+        },
+    )
+    assert denied.status_code == 401
+
+
+def test_agent_mcp_key_cannot_access_global_native_scope(agent_key_client):
+    admin = {"Authorization": "Bearer admin-secret"}
+    key = agent_key_client.post(
+        "/register",
+        headers=admin,
+        json={"agent_id": "codex", "projects": ["alpha"]},
+    ).json()["api_key"]
+    agent = {"Authorization": f"Bearer {key}"}
+    initialized = agent_key_client.post(
+        "/mcp?agent_id=codex&project=alpha",
+        headers=agent,
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-03-26"},
+        },
+    )
+    session = initialized.headers["mcp-session-id"]
+    denied = agent_key_client.post(
+        "/mcp",
+        headers={**agent, "Mcp-Session-Id": session},
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "dhub_memory_add",
+                "arguments": {"scope": "global", "content": "forbidden"},
+            },
+        },
+    )
+    assert denied.status_code == 200
+    assert denied.json()["error"]["code"] == -32003
+
+
+def test_disabling_agent_revokes_existing_mcp_session(agent_key_client):
+    admin = {"Authorization": "Bearer admin-secret"}
+    key = agent_key_client.post(
+        "/register",
+        headers=admin,
+        json={"agent_id": "codex", "projects": ["alpha"]},
+    ).json()["api_key"]
+    agent = {"Authorization": f"Bearer {key}"}
+    initialized = agent_key_client.post(
+        "/mcp?agent_id=codex&project=alpha",
+        headers=agent,
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-03-26"},
+        },
+    )
+    session = initialized.headers["mcp-session-id"]
+    agent_key_client.post(
+        "/register",
+        headers=admin,
+        json={"agent_id": "codex", "projects": ["alpha"], "enabled": False},
+    )
+    revoked = agent_key_client.post(
+        "/mcp",
+        headers={**agent, "Mcp-Session-Id": session},
+        json={"jsonrpc": "2.0", "id": 2, "method": "ping", "params": {}},
+    )
+    assert revoked.status_code == 404
+
+
 def test_streamable_http_mcp_initializes_and_lists_tools(client):
     for namespace, description in [
         ("global", "Global echo"),
@@ -114,8 +265,22 @@ def test_streamable_http_mcp_initializes_and_lists_tools(client):
         json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
     )
     assert listed.status_code == 200
-    assert listed.json()["result"]["tools"][0]["name"] == "rmcp__local__echo"
-    assert listed.json()["result"]["tools"][0]["description"] == "Project echo"
+    tools = {tool["name"]: tool for tool in listed.json()["result"]["tools"]}
+    assert "dhub_memory_search" in tools
+    assert tools["rmcp__local__echo"]["description"] == "Project echo"
+
+    native_call = client.post(
+        "/mcp",
+        headers={"Mcp-Session-Id": session_id},
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "dhub_files_list", "arguments": {}},
+        },
+    )
+    assert native_call.status_code == 200
+    assert native_call.json()["result"]["structuredContent"] == {"files": []}
 
     notification = client.post(
         "/mcp",
@@ -128,7 +293,7 @@ def test_streamable_http_mcp_initializes_and_lists_tools(client):
     after_close = client.post(
         "/mcp",
         headers={"Mcp-Session-Id": session_id},
-        json={"jsonrpc": "2.0", "id": 3, "method": "ping", "params": {}},
+        json={"jsonrpc": "2.0", "id": 4, "method": "ping", "params": {}},
     )
     assert after_close.status_code == 404
     assert after_close.json()["error"]["code"] == -32001
@@ -178,17 +343,16 @@ def test_mcp_project_overrides_agent_and_global(client, tmp_path):
     tools = client.post(
         "/mcp/tools/list", json={"agent_id": "minis", "project": "alpha"}
     ).json()["tools"]
-    assert tools == [
-        {
-            "name": "rmcp__server__echo",
-            "description": "project",
-            "inputSchema": {"type": "object", "properties": {}},
-            "server": "server",
-        }
-    ]
+    remote = next(tool for tool in tools if tool["name"] == "rmcp__server__echo")
+    assert remote == {
+        "name": "rmcp__server__echo",
+        "description": "project",
+        "inputSchema": {"type": "object", "properties": {}},
+        "server": "server",
+    }
 
 
-def test_memory_namespaces_are_isolated(client):
+def test_project_memory_is_shared_across_agents(client):
     added = client.post(
         "/memory/add",
         json={
@@ -206,12 +370,40 @@ def test_memory_namespaces_are_isolated(client):
             "query": "PostgreSQL",
         },
     ).json()
-    no = client.post(
+    also_yes = client.post(
         "/memory/search",
         json={
             "namespace": "projects/alpha",
             "agent_id": "claude",
             "query": "PostgreSQL",
+        },
+    ).json()
+    assert len(yes["results"]) == 1 and len(also_yes["results"]) == 1
+
+
+def test_agent_memory_namespaces_are_isolated(client):
+    client.post(
+        "/memory/add",
+        json={
+            "namespace": "agents/minis",
+            "agent_id": "minis",
+            "content": "private observation",
+        },
+    )
+    yes = client.post(
+        "/memory/search",
+        json={
+            "namespace": "agents/minis",
+            "agent_id": "minis",
+            "query": "private",
+        },
+    ).json()
+    no = client.post(
+        "/memory/search",
+        json={
+            "namespace": "agents/claude",
+            "agent_id": "claude",
+            "query": "private",
         },
     ).json()
     assert len(yes["results"]) == 1 and no["results"] == []

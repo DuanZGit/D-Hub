@@ -6,7 +6,12 @@ d-hub = 一个 Python 进程（:10101）+ 一个 PostgreSQL（:5432）。
 记忆、Wiki、MCP、技能、文件、Agent 路由、Dashboard，全在一个进程里。
 
 Dashboard：`http://<服务器>:10101/ui`。根地址会自动跳转到 Dashboard；
-`deploy/install.sh` 会生成 `DHUB_API_KEY`，管理台和客户端使用该密钥访问业务 API。
+`deploy/install.sh` 会生成 `DHUB_ADMIN_KEY`，仅供管理台和资产同步使用；运行期
+Agent 使用注册时单独签发的密钥。
+
+Agent 接入、原生 MCP 工具、资产 manifest 和提示词模板见
+[AGENT_INTEGRATION.md](AGENT_INTEGRATION.md)。可运行示例位于
+[`examples/agent-assets`](examples/agent-assets)。
 
 ## 设计原则
 

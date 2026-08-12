@@ -16,7 +16,9 @@ from .config import VERSION, merged_json
 class McpRouter:
     """Resolve tiered MCP configs and proxy JSON-RPC calls."""
 
-    def __init__(self, cache_ttl: float = 120, session_ttl: float = 3600):
+    def __init__(
+        self, cache_ttl: float = 120, session_ttl: float = 3600, native=None
+    ):
         self.cache_ttl = cache_ttl
         self.session_ttl = session_ttl
         self.cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
@@ -24,6 +26,7 @@ class McpRouter:
         self.http_session_locks: dict[str, asyncio.Lock] = {}
         self._session_generation = 0
         self._session_state_lock = threading.Lock()
+        self.native = native
 
     def clear(self):
         self.cache.clear()
@@ -56,7 +59,9 @@ class McpRouter:
         return merged_json("mcp", agent_id, project)[0]
 
     async def list_tools(self, agent_id=None, project=None):
-        tools: list[dict[str, Any]] = []
+        tools: list[dict[str, Any]] = (
+            self.native.list_tools() if self.native is not None else []
+        )
         for server_id, config in self.configs(agent_id, project).items():
             if config.get("enabled", True) is False:
                 continue
@@ -99,7 +104,25 @@ class McpRouter:
                 tools.append(item)
         return {"tools": tools}
 
-    async def call(self, name, arguments=None, agent_id=None, project=None):
+    async def call(
+        self,
+        name,
+        arguments=None,
+        agent_id=None,
+        project=None,
+        allow_global=True,
+    ):
+        if name.startswith("dhub_"):
+            if self.native is None:
+                raise KeyError("MCP tool not found")
+            return await asyncio.to_thread(
+                self.native.call,
+                name,
+                arguments,
+                agent_id,
+                project,
+                allow_global,
+            )
         parts = name.split("__", 2)
         if len(parts) != 3 or parts[0] != "rmcp":
             raise ValueError("MCP tool must use rmcp__server__tool name")

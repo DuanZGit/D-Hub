@@ -8,6 +8,10 @@ http://192.168.5.242:10101
 
 每个 agent 只需配这一个地址。
 
+连接 MCP 后可直接使用 `dhub_memory_*`、`dhub_wiki_*`、`dhub_skill*` 和
+`dhub_file*` 原生工具。注册与本地资产发布使用 `dhub-agent-sync`；完整步骤见
+[AGENT_INTEGRATION.md](AGENT_INTEGRATION.md)。
+
 ## Minis
 
 Minis 的 MCP 配置指向 d-hub：
@@ -18,7 +22,7 @@ Minis 的 MCP 配置指向 d-hub：
     "dhub": {
       "url": "http://192.168.5.242:10101/mcp?agent_id=minis&project=project-a",
       "transport": "streamable-http",
-      "headers": {"Authorization": "Bearer <DHUB_API_KEY>"}
+      "headers": {"Authorization": "Bearer <AGENT_API_KEY>"}
     }
   }
 }
@@ -28,7 +32,7 @@ Minis 的 MCP 配置指向 d-hub：
 ```bash
 curl -X POST http://192.168.5.242:10101/register \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $DHUB_API_KEY" \
+  -H "Authorization: Bearer $DHUB_ADMIN_KEY" \
   -d '{"agent_id":"minis","host":"192.168.5.101","tools":["memory","wiki","mcp","files","skills"],"projects":["project-a","project-b"]}'
 ```
 
@@ -37,14 +41,14 @@ curl -X POST http://192.168.5.242:10101/register \
 ```bash
 claude mcp add dhub --transport http \
   "http://192.168.5.242:10101/mcp?agent_id=claude-code&project=project-a" \
-  --header "Authorization: Bearer <DHUB_API_KEY>"
+  --header "Authorization: Bearer <AGENT_API_KEY>"
 ```
 
 注册：
 ```bash
 curl -X POST http://192.168.5.242:10101/register \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $DHUB_API_KEY" \
+  -H "Authorization: Bearer $DHUB_ADMIN_KEY" \
   -d '{"agent_id":"claude-code","host":"192.168.5.102","tools":["memory","wiki","mcp","code"],"projects":["project-a"]}'
 ```
 
@@ -55,7 +59,7 @@ curl -X POST http://192.168.5.242:10101/register \
 ```toml
 [mcp_servers.dhub]
 url = "http://192.168.5.242:10101/mcp?agent_id=codex&project=project-a"
-http_headers = { Authorization = "Bearer <DHUB_API_KEY>" }
+http_headers = { Authorization = "Bearer <AGENT_API_KEY>" }
 ```
 
 ## OpenClaw
@@ -66,7 +70,7 @@ http_headers = { Authorization = "Bearer <DHUB_API_KEY>" }
     "dhub": {
       "url": "http://192.168.5.242:10101/mcp?agent_id=openclaw&project=project-a",
       "transport": "streamable-http",
-      "headers": {"Authorization": "Bearer <DHUB_API_KEY>"}
+      "headers": {"Authorization": "Bearer <AGENT_API_KEY>"}
     }
   }
 }
@@ -76,7 +80,8 @@ http_headers = { Authorization = "Bearer <DHUB_API_KEY>" }
 
 ```bash
 export DHUB_URL="http://192.168.5.242:10101"
-export DHUB_API_KEY="<安装脚本输出的密钥>"
+export DHUB_ADMIN_KEY="<安装脚本输出的管理密钥>"
+export AGENT_API_KEY="<首次注册 Agent 时返回的密钥>"
 export AGENT_ID="minis"
 ```
 
@@ -86,6 +91,6 @@ export AGENT_ID="minis"
 # Minis 调用 Claude Code
 curl -X POST http://192.168.5.242:10101/agent/claude-code/call \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $DHUB_API_KEY" \
+  -H "Authorization: Bearer $DHUB_ADMIN_KEY" \
   -d '{"method":"code.review","params":{"file":"/path/to/file.py","namespace":"projects/project-a"}}'
 ```

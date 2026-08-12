@@ -34,7 +34,7 @@ journalctl -u dhub-backup.service
 
 ```bash
 # 1. 通过 Dashboard 或 API 恢复文件归档
-curl -X POST -H "Authorization: Bearer $DHUB_API_KEY" \
+curl -X POST -H "Authorization: Bearer $DHUB_ADMIN_KEY" \
   "http://127.0.0.1:10101/backup/<backup-name>/restore"
 
 # 2. 若备份包含 mem0.dump，服务会用事务式 pg_restore 一并恢复

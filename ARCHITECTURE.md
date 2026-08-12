@@ -104,7 +104,7 @@ Agent 调用 MCP 工具（tools/call {name, args}）
 | global:shared | global:shared | 共识层 |
 | agents:minis | global:minis | Agent: minis |
 | agents:claude-code | global:claude-code | Agent: claude-code |
-| projects:project-a:minis | global:minis:project-a | Project: minis + project-a |
+| projects:project-a | global:project:project-a | Project: project-a 内共享 |
 
 ### 3.2 访问规则
 
@@ -215,7 +215,7 @@ d-hub 内嵌 `/ui`，提供常用管理和操作界面。
 
 - 前端：单页 HTML/JS（可内嵌 CDN 的 Vue/HTMX，或纯 JS）
 - 数据：通过 d-hub 的 REST API 读写（与 agent 同一套 API）
-- 认证：可选全局 API key；安装脚本默认生成并启用
+- 认证：Admin key 管理 REST；每 Agent 独立 key 绑定 MCP 身份和项目
 - 路由：`/ui/*` 由 FastAPI 提供静态文件
 
 ### 与 agent API 的关系
@@ -230,11 +230,11 @@ app.mount("/ui", StaticFiles(directory="/opt/d-hub/dhub/ui", html=True), name="u
 
 ## 9. 安全
 
-- 局域网：Bearer 或 `X-API-Key` 全局密钥（新安装默认开启）
+- 局域网：管理 REST 使用 Admin key；Agent MCP 使用独立 Agent key
 - 后续公网：建议在反向代理增加 TLS，并演进为每 Agent 独立密钥
 - mcp-switch 仅 localhost，不对外暴露
 - PostgreSQL 仅 localhost，不对外暴露
-- Dashboard 静态页面公开，业务 API 使用仅保存在当前标签页的 API key
+- Dashboard 静态页面公开，管理 API 使用仅保存在当前标签页的 Admin key
 
 ## 10. 恢复手册
 
