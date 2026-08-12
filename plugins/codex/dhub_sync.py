@@ -61,6 +61,12 @@ def save_state(state):
     STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def sanitize(text):
+    """Remove/replace lone Unicode surrogates so json.dumps never emits \\udXXX
+    escapes that the Python-side D-Hub cannot UTF-8 encode."""
+    return text.encode("utf-8", errors="replace").decode("utf-8")
+
+
 def content_to_text(content):
     """Normalize string or multimodal content blocks to plain text."""
     if isinstance(content, str):
@@ -115,7 +121,7 @@ def parse_events(lines):
         except ValueError:
             continue
         role, content = extract_role_content(obj)
-        text = content_to_text(content)
+        text = sanitize(content_to_text(content))
         if not text.strip():
             continue
         if role not in ROLES:
@@ -177,6 +183,9 @@ def main():
             return 1
         record = {"session_id": session_id, "offset": 0}
         state.setdefault("transcripts", {})[transcript] = record
+        # 立即持久化 session 映射：即使后续 messages 上传失败，
+        # 重跑时也能复用同一个远程 session，避免重复创建。
+        save_state(state)
 
     offset = record.get("offset", 0)
     events = list(parse_events(lines[offset:]))
