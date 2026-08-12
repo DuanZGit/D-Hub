@@ -1,9 +1,11 @@
 # D-Hub：多 Agent 统一协调层
 
+> **版本 v0.2.0** — 新增会话转录层（sessions store + REST + MCP 工具）
+
 ## 一句话
 
 D-Hub = 一个 Python 进程（:10101）+ 一个 PostgreSQL（:5432）。  
-记忆、Wiki、MCP、技能、文件、Agent 路由、Dashboard，全在一个进程里。
+记忆、Wiki、会话转录、MCP、技能、文件、Agent 路由、Dashboard，全在一个进程里。
 
 Dashboard：`http://<服务器>:10101/ui`。根地址会自动跳转到 Dashboard；
 `deploy/install.sh` 会生成 `DHUB_ADMIN_KEY`，仅供管理台和资产同步使用；运行期
@@ -113,7 +115,7 @@ sudo systemctl restart dhub
 http://<服务器IP>:10101/ui
 ```
 
-Dashboard 提供 11 个功能模块：总览、Agent、MCP、记忆、Wiki、技能、文件、同步、日志、配置、备份。
+Dashboard 提供 12 个功能模块：总览、Agent、MCP、记忆、Wiki、会话、技能、文件、同步、日志、配置、备份。
 
 ### 常用 API 示例
 
@@ -153,6 +155,28 @@ curl -X POST http://127.0.0.1:10101/wiki/page \
 
 ```bash
 curl "http://127.0.0.1:10101/wiki/search?namespace=projects%2Fproject-a&q=PostgreSQL"
+```
+
+#### 创建会话转录
+
+```bash
+curl -X POST http://127.0.0.1:10101/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"namespace":"projects/project-a","title":"重构讨论","cwd":"/repo"}'
+```
+
+#### 追加消息到会话
+
+```bash
+curl -X POST http://127.0.0.1:10101/sessions/<session_id>/messages \
+  -H "Content-Type: application/json" \
+  -d '{"namespace":"projects/project-a","messages":[{"role":"user","content":"开始重构"}]}'
+```
+
+#### 搜索会话
+
+```bash
+curl "http://127.0.0.1:10101/sessions/search?namespace=projects%2Fproject-a&q=重构"
 ```
 
 #### 上传文件
@@ -274,6 +298,11 @@ dhub-agent-sync .dhub/dhub-agent.json
 | `dhub_skills_list` | 列出技能 |
 | `dhub_files_list` | 列出文件 |
 | `dhub_file_read` | 读取文件 |
+| `dhub_session_create` | 创建会话转录 |
+| `dhub_session_list` | 列出会话 |
+| `dhub_session_get` | 读取会话 |
+| `dhub_session_append` | 追加会话消息 |
+| `dhub_session_search` | 搜索会话 |
 
 更多细节见 [AGENT_INTEGRATION.md](AGENT_INTEGRATION.md) 和 [examples/agent-assets](examples/agent-assets)。
 
@@ -297,6 +326,10 @@ dhub-agent-sync .dhub/dhub-agent.json
 │   ├── global/
 │   ├── agents/<id>/
 │   └── projects/<id>/
+├── sessions/                # 会话转录（JSON 元数据 + JSONL 消息流）
+│   ├── global/
+│   ├── agents/<id>/
+│   └── projects/<id>/
 ├── config/                  # 配置文件
 │   └── dhub.env
 ├── data/                    # 数据文件
@@ -315,6 +348,7 @@ dhub-agent-sync .dhub/dhub-agent.json
 | MCP 路由 | Python 内置 | JSON-RPC 转发 + 三层配置合并 |
 | 技能仓库 | 文件系统 | 三层目录：global / agents / projects |
 | 文件共享 | 文件系统 | 三层目录：global / agents / projects |
+| 会话转录 | 文件系统 | JSON 元数据 + JSONL 消息流，三层目录 |
 | Dashboard | FastAPI 静态文件 | 内嵌在 D-Hub |
 | 数据库 | PostgreSQL + pgvector | 系统 apt 安装，仅 localhost |
 | 同步 | systemd timer | 定时运行记忆 ↔ Wiki 语义同步 |
@@ -331,6 +365,7 @@ dhub-agent-sync .dhub/dhub-agent.json
 │  ├── /wiki/*         Wiki（内置 Markdown 引擎）           │
 │  ├── /skills/*       技能仓库                             │
 │  ├── /files/*        文件共享                             │
+│  ├── /sessions/*     会话转录                             │
 │  ├── /agent/*        Agent 注册 + 路由                    │
 │  ├── /sync/*         同步触发                             │
 │  └── /ui             Dashboard                            │
@@ -348,7 +383,7 @@ dhub-agent-sync .dhub/dhub-agent.json
 
 ## 三级目录结构
 
-所有资产（MCP、Skills、Wiki、Files）统一走同一套目录模式：
+所有资产（MCP、Skills、Wiki、Files、Sessions）统一走同一套目录模式：
 
 ```
 /opt/d-hub/
@@ -364,7 +399,11 @@ dhub-agent-sync .dhub/dhub-agent.json
 │   ├── global/
 │   ├── agents/<id>/
 │   └── projects/<id>/
-└── files/                   # 共享文件
+├── files/                   # 共享文件
+│   ├── global/
+│   ├── agents/<id>/
+│   └── projects/<id>/
+└── sessions/                # 会话转录（<id>.json + <id>.jsonl）
     ├── global/
     ├── agents/<id>/
     └── projects/<id>/
