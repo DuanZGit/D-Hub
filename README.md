@@ -1,8 +1,8 @@
-# d-hub：多 Agent 统一协调层
+# D-Hub：多 Agent 统一协调层
 
 ## 一句话
 
-d-hub = 一个 Python 进程（:10101）+ 一个 PostgreSQL（:5432）。  
+D-Hub = 一个 Python 进程（:10101）+ 一个 PostgreSQL（:5432）。  
 记忆、Wiki、MCP、技能、文件、Agent 路由、Dashboard，全在一个进程里。
 
 Dashboard：`http://<服务器>:10101/ui`。根地址会自动跳转到 Dashboard；
@@ -15,7 +15,7 @@ Agent 接入、原生 MCP 工具、资产 manifest 和提示词模板见
 
 ## 设计原则
 
-1. **单进程**：d-hub 一个 Python 进程搞定所有协调
+1. **单进程**：D-Hub 一个 Python 进程搞定所有协调
 2. **单数据库**：PostgreSQL + pgvector 存储记忆和结构化数据
 3. **三级隔离**：共识层（global）/ Agent 层（agents/<id>）/ Project 层（projects/<id>）
 4. **读时合并**：MCP、Skills 配置每次请求实时合并，无缓存、无 cron
@@ -23,17 +23,250 @@ Agent 接入、原生 MCP 工具、资产 manifest 和提示词模板见
 6. **非 Docker**：原生 Python，systemd 管理
 7. **定时任务只做语义同步**：记忆 ↔ Wiki 提炼（LLM 处理）
 
+## 快速开始
+
+### 1. 环境要求
+
+- Linux 服务器，建议 Ubuntu 24.04
+- Python 3.10+
+- PostgreSQL 16 + pgvector
+
+### 2. 安装依赖
+
+```bash
+sudo apt update
+sudo apt install -y postgresql postgresql-contrib postgresql-16-pgvector
+sudo systemctl enable --now postgresql
+```
+
+### 3. 准备数据库
+
+```bash
+sudo -u postgres psql -c "CREATE DATABASE mem0;"
+sudo -u postgres psql -d mem0 -c "CREATE EXTENSION IF NOT EXISTS vector;"
+sudo -u postgres psql -c "CREATE USER mem0 WITH PASSWORD 'your-password';"
+sudo -u postgres psql -c "GRANT ALL ON DATABASE mem0 TO mem0;"
+```
+
+### 4. 部署 D-Hub
+
+```bash
+git clone https://github.com/DuanZGit/D-Hub.git
+cd D-Hub
+sudo bash deploy/install.sh
+```
+
+安装脚本会自动完成：
+- 创建 `/opt/d-hub` 目录结构
+- 安装 Python 依赖
+- 配置 systemd 服务
+- 启动 `dhub.service`
+
+### 5. 验证
+
+```bash
+curl http://127.0.0.1:10101/health
+```
+
+## 如何使用
+
+### 启动与停止
+
+```bash
+sudo systemctl start dhub
+sudo systemctl stop dhub
+sudo systemctl restart dhub
+sudo systemctl status dhub
+```
+
+### 配置环境变量
+
+编辑 `/opt/d-hub/config/dhub.env`：
+
+```env
+DHUB_ROOT=/opt/d-hub
+DHUB_PORT=10101
+DHUB_MEMORY_BACKEND=json
+NEW_API_BASE_URL=http://127.0.0.1:3000/v1
+NEW_API_KEY=your-key
+DHUB_LLM_MODEL=your-model
+DHUB_EMBED_MODEL=your-embedding-model
+DHUB_EMBED_DIMS=1536
+MEM0_DB_HOST=127.0.0.1
+MEM0_DB_PORT=5432
+MEM0_DB_NAME=mem0
+MEM0_DB_USER=mem0
+MEM0_DB_PASSWORD=your-password
+```
+
+修改后重启：
+
+```bash
+sudo systemctl restart dhub
+```
+
+### Dashboard
+
+浏览器打开：
+
+```
+http://<服务器IP>:10101/ui
+```
+
+Dashboard 提供 11 个功能模块：总览、Agent、MCP、记忆、Wiki、技能、文件、同步、日志、配置、备份。
+
+### 常用 API 示例
+
+#### Agent 注册
+
+```bash
+curl -X POST http://127.0.0.1:10101/register \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"minis","projects":["project-a"]}'
+```
+
+#### 添加记忆
+
+```bash
+curl -X POST http://127.0.0.1:10101/memory/add \
+  -H "Content-Type: application/json" \
+  -d '{"namespace":"projects/project-a","agent_id":"minis","content":"决定使用 PostgreSQL"}'
+```
+
+#### 搜索记忆
+
+```bash
+curl -X POST http://127.0.0.1:10101/memory/search \
+  -H "Content-Type: application/json" \
+  -d '{"namespace":"projects/project-a","agent_id":"minis","query":"PostgreSQL"}'
+```
+
+#### 创建 Wiki 页面
+
+```bash
+curl -X POST http://127.0.0.1:10101/wiki/page \
+  -H "Content-Type: application/json" \
+  -d '{"namespace":"projects/project-a","title":"架构决策","content":"# 数据库选型\n\nPostgreSQL。"}'
+```
+
+#### 搜索 Wiki
+
+```bash
+curl "http://127.0.0.1:10101/wiki/search?namespace=projects%2Fproject-a&q=PostgreSQL"
+```
+
+#### 上传文件
+
+```bash
+curl -X POST "http://127.0.0.1:10101/files/upload?namespace=global" \
+  -F "file=@/path/to/file.txt"
+```
+
+#### MCP 工具列表
+
+```bash
+curl -X POST http://127.0.0.1:10101/mcp/tools/list \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"minis","project":"project-a"}'
+```
+
+### 启用 Mem0 记忆后端
+
+1. 确认 PostgreSQL 和 pgvector 已安装
+2. 在 `/opt/d-hub/config/dhub.env` 中配置：
+   - `NEW_API_KEY`
+   - `DHUB_LLM_MODEL`
+   - `DHUB_EMBED_MODEL`
+   - `MEM0_DB_PASSWORD`（与 PostgreSQL `mem0` 用户密码一致）
+3. 重启服务：
+
+```bash
+sudo systemctl restart dhub
+```
+
+4. 验证后端：
+
+```bash
+curl http://127.0.0.1:10101/health
+# 查看 "memory_backend": "mem0"
+```
+
+### 备份与恢复
+
+#### 手动备份
+
+```bash
+curl -X POST http://127.0.0.1:10101/backup
+```
+
+备份文件保存在 `/opt/d-hub/backups/<时间戳>/`。
+
+#### 查看备份列表
+
+```bash
+curl http://127.0.0.1:10101/backups
+```
+
+#### 恢复备份
+
+```bash
+curl -X POST "http://127.0.0.1:10101/backup/<备份名>/restore"
+```
+
+### 定时任务
+
+D-Hub 使用 systemd timer 管理定时任务：
+
+| 任务 | 频率 | 说明 |
+|---|---|---|
+| 记忆 ↔ Wiki 语义同步 | 每 4 小时 | 需要配置 LLM 模型 |
+| 完整备份 | 每天 02:00 | 文件 + PostgreSQL |
+
+查看定时任务状态：
+
+```bash
+systemctl list-timers | grep dhub
+```
+
+### 目录结构
+
+```
+/opt/d-hub/
+├── mcp/                     # MCP 服务器配置
+│   ├── global/
+│   ├── agents/<id>/
+│   └── projects/<id>/
+├── skills/                  # 技能仓库
+│   ├── global/
+│   ├── agents/<id>/
+│   └── projects/<id>/
+├── wiki/                    # Wiki 页面
+│   ├── global/
+│   ├── agents/<id>/
+│   └── projects/<id>/
+├── files/                   # 共享文件
+│   ├── global/
+│   ├── agents/<id>/
+│   └── projects/<id>/
+├── config/                  # 配置文件
+│   └── dhub.env
+├── data/                    # 数据文件
+├── logs/                    # 日志
+├── backups/                 # 备份
+└── scripts/                 # 脚本
+```
+
 ## 技术栈
 
 | 组件 | 技术 | 说明 |
 |---|---|---|
-| d-hub | Python FastAPI | 一个进程，全包 |
+| D-Hub | Python FastAPI | 一个进程，全包 |
 | 记忆 | `import mem0` | Python 库，直接调用，不是独立服务 |
 | Wiki | Python 内置 | Markdown 文件 CRUD + 全文搜索（whoosh） |
 | MCP 路由 | Python 内置 | JSON-RPC 转发 + 三层配置合并 |
 | 技能仓库 | 文件系统 | 三层目录：global / agents / projects |
 | 文件共享 | 文件系统 | 三层目录：global / agents / projects |
-| Dashboard | FastAPI 静态文件 | 内嵌在 d-hub |
+| Dashboard | FastAPI 静态文件 | 内嵌在 D-Hub |
 | 数据库 | PostgreSQL + pgvector | 系统 apt 安装，仅 localhost |
 | 同步 | systemd timer | 定时运行记忆 ↔ Wiki 语义同步 |
 
@@ -41,7 +274,7 @@ Agent 接入、原生 MCP 工具、资产 manifest 和提示词模板见
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│               d-hub (:10101) — 唯一进程                     │
+│               D-Hub (:10101) — 唯一进程                     │
 │                                                           │
 │  FastAPI 服务                                            │
 │  ├── /mcp/*          MCP 路由（三层合并）                 │
@@ -104,7 +337,7 @@ Agent 请求资源 X
 
 ```
 Agent → POST /mcp/tools/list {agent_id, project}
-     → d-hub 读取 mcp/global/ + mcp/agents/<id>/ + mcp/projects/<id>/
+     → D-Hub 读取 mcp/global/ + mcp/agents/<id>/ + mcp/projects/<id>/
      → 合并（project 覆盖 agent 覆盖 global）
      → 返回合并后的工具列表
      （无缓存、无 cron、每请求实时计算）
