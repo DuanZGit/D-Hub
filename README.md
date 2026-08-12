@@ -324,6 +324,8 @@ dhub-uploader --source minis --url http://<d-hub>:10101 \
 
 详见 [plugins/README.md](plugins/README.md)。
 
+另有一个 [dhub skill](skills/dhub/)，让 agent 按需加载 D-Hub 用法速查（省 token），遵循 agentskills.io 标准，Claude Code / Codex / Pi 通用。
+
 ### 原生 MCP 工具
 
 连接后，D-Hub 自动提供以下工具：
