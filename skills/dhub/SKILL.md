@@ -184,6 +184,65 @@ curl -sS -G "$DHUB_URL/wiki/page" -H "Authorization: Bearer $DHUB_API_KEY" \
 - **REST + 显式 namespace**：能读任意 agent,需要 admin key（`DHUB_ADMIN_KEY`）。
 - 本机 Minis 用 `cat /var/minis/workspace/d-hub/.dhub-admin-key` 作为 admin key。
 
+## 远程操控其它 agent（agent_call）
+
+要让某 agent（如 Pi/Termux）接受 Minis 远程下发指令，需要：① 该 agent 注册了 `url` 回调；② 它跑着一个 HTTP 服务监听该 url。
+
+### 注册 agent（D-Hub 侧，我这边直接做）
+
+```bash
+curl -sS -X POST "$DHUB_URL/register" -H "Authorization: Bearer $DHUB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"<id>","host":"termux","url":"http://<手机局域网IP>:4400/dhub","tools":["sync_wiki","upload_memory","read_local"],"projects":["default"],"enabled":true}'
+```
+
+Pi 已注册：agent_id=`pi`，url=`http://192.168.5.10:4400/dhub`。
+
+### 发起调用
+
+```bash
+curl -sS -X POST "$DHUB_URL/agent/<agent_id>/call" -H "Authorization: Bearer $DHUB_API_KEY" \
+  -H "Content-Type: application/json" -d '{"method":"ping","params":{}}'
+```
+D-Hub 会向该 agent 的 url 转发 `{"method","params"}`，并原样返回它的响应 `{"result":{...}}`。
+
+### 让 Pi 端起回调服务（可整段转发给 Pi coding agent）
+
+> 把下面文件存为 `/data/data/com.termux/files/home/dhub_callback.py`，运行 `nohup python3 dhub_callback.py &`：
+>
+> ```python
+> import json, subprocess, http.server, socketserver
+> class H(http.server.BaseHTTPRequestHandler):
+>     def _ok(self, obj):
+>         b = json.dumps({"ok": True, "result": obj}).encode()
+>         self.send_response(200); self.send_header("Content-Type","application/json")
+>         self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+>     def do_POST(self):
+>         try: b = json.loads(self.rfile.read(int(self.headers.get("Content-Length",0))))
+>         except Exception: self.send_error(400); return
+>         m = b.get("method")
+>         try:
+>             if m == "ping": self._ok({"pong": True})
+>             elif m == "read_wiki":
+>                 out = subprocess.run(["ls","wiki/"], capture_output=True, text=True)
+>                 self._ok({"pages": out.stdout.split()})
+>             else: self._ok({"unhandled": m, "params": b.get("params")})
+>         except Exception as e: self.send_error(500, str(e))
+>     def log_message(self,*a): pass
+> socketserver.TCPServer.allow_reuse_address = True
+> with socketserver.TCPServer(("0.0.0.0", 4400), H) as httpd:
+>     httpd.serve_forever()
+> ```
+>
+> 保持运行后回复"服务已起"，Minis 会发 `ping` 验证，通了下发同步指令。
+
+回调服务起来后，我用 `POST /agent/pi/call` 发 `{"method":"ping"}` 验证连通，通了就下发 `sync_wiki`/`upload_memory` 让它同步本地 wiki 和 AGENTS.md。
+
+### 关键约束
+
+- 服务只能由 Pi（Termux）自己起——Minis 在 PRoot 沙箱无 Shizuku，进不了 `/data/data/com.termux`。
+- 回调 url 用**手机局域网 IP**（如 `192.168.5.10`），须与 D-Hub（UG `192.168.5.242`）同网段。
+
 ## 命名空间约定
 
 - `global` — 所有 agent 共享的共识
