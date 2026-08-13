@@ -26,8 +26,6 @@ import argparse
 import hashlib
 import json
 import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -167,21 +165,12 @@ class JsonlSource(Source):
 
 
 class MinisSource(Source):
-    """Upload Minis daily memory logs (*.md) as memories, GLOBAL.md as a wiki page.
-
-    Optionally also syncs Minis session transcripts (DHUB_MINIS_SESSIONS=1 or
-    --minis-sessions). Transcripts are pushed AS-IS (raw role/content/timestamp)
-    with the original message_id kept in metadata — no restructuring. Minis
-    collapses tool calls into assistant narrative text, so we tag each message
-    with `format: legacy-narrative` so the query layer knows not to expect
-    structured tool entries.
-    """
+    """Upload Minis daily memory logs (*.md) as memories, GLOBAL.md as a wiki page."""
 
     name = "minis"
 
-    def __init__(self, root: Path, include_sessions: bool = False):
+    def __init__(self, root: Path):
         self.root = root
-        self.include_sessions = include_sessions
 
     def scan(self):
         items = []
@@ -215,86 +204,6 @@ class MinisSource(Source):
                         "meta": {"source": "minis", "file": path.name},
                     }
                 )
-        if self.include_sessions:
-            items.extend(self._scan_sessions())
-        return items
-
-    def _scan_sessions(self):
-        """Pull Minis session transcripts via minis-sessions-cli, push raw.
-
-        Incremental via state per session: each scan re-reads from the last
-        synced offset so only new messages are pushed. Messages are mapped
-        verbatim: role/content/timestamp from Minis, message_id preserved in
-        metadata alongside `format: legacy-narrative`.
-        """
-        items = []
-        cli = shutil.which("minis-sessions-cli")
-        if not cli:
-            return items
-        try:
-            proc = subprocess.run(
-                [cli, "list", "--limit", "100"],
-                capture_output=True, text=True, timeout=60,
-            )
-            data = json.loads(proc.stdout) if proc.stdout.strip() else {}
-        except (subprocess.TimeoutExpired, ValueError):
-            return items
-        sessions = data.get("data", data).get("sessions", [])
-        for s in sessions:
-            sid = s.get("session_id")
-            if not sid:
-                continue
-            events = []
-            offset = 0
-            try:
-                while True:
-                    proc = subprocess.run(
-                        [cli, "messages", "--id", sid,
-                         "--full", "--limit", "100", "--offset", str(offset)],
-                        capture_output=True, text=True, timeout=60,
-                    )
-                    d = json.loads(proc.stdout) if proc.stdout.strip() else {}
-                    msgs = d.get("data", d).get("messages", [])
-                    if not msgs:
-                        break
-                    for m in msgs:
-                        if not isinstance(m, dict):
-                            continue
-                        role = m.get("role", "assistant")
-                        if role not in ("user", "assistant", "tool", "system"):
-                            role = "assistant"
-                        events.append(
-                            {
-                                "role": role,
-                                "content": m.get("text", "") or "",
-                                "timestamp": m.get("created_at", ""),
-                                "metadata": {
-                                    "message_id": m.get("message_id", ""),
-                                    "format": "legacy-narrative",
-                                },
-                            }
-                        )
-                    if len(msgs) < 100:
-                        break
-                    offset += len(msgs)
-            except (subprocess.TimeoutExpired, ValueError):
-                continue
-            if not events:
-                continue
-            items.append(
-                {
-                    "kind": "session",
-                    "key": f"minis:session:{sid}",
-                    "events": events,
-                    "meta": {
-                        "source": "minis",
-                        "agent_id": "minis",
-                        "path": f"minis-session:{sid}",
-                        "filename": s.get("title") or f"minis-{sid[:12]}",
-                        "title": s.get("title") or f"minis-{sid[:12]}",
-                    },
-                }
-            )
         return items
 
 
@@ -428,10 +337,7 @@ def build_source(args) -> Source:
     if args.source == "codex":
         return JsonlSource(home / ".codex" / "sessions", "codex")
     if args.source == "minis":
-        return MinisSource(
-            Path("/var/minis/memory"),
-            include_sessions=args.minis_sessions,
-        )
+        return MinisSource(Path("/var/minis/memory"))
     if args.source == "generic":
         if not args.dir:
             raise SystemExit("--source generic requires --dir")
@@ -458,8 +364,6 @@ def build_parser():
     )
     parser.add_argument("--namespace", default=os.getenv("DHUB_NAMESPACE", "global"))
     parser.add_argument("--agent-id", default=os.getenv("DHUB_AGENT_ID", ""))
-    parser.add_argument("--minis-sessions", action="store_true", default=False,
-        help="also sync Minis session transcripts (raw, with legacy-narrative format tag)")
     parser.add_argument("--state", default=str(DEFAULT_STATE))
     return parser
 
