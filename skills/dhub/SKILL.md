@@ -93,11 +93,40 @@ curl -sS -G "$DHUB_URL/sessions/<session_id>" \
   --data-urlencode "namespace=$DHUB_NAMESPACE"
 ```
 
-## 会话同步（别手动做）
+## 会话同步（分场景）
 
-本机会话转录的同步由**原生插件自动完成**（Codex hooks / Pi extension / Claude Code hooks），会话结束自动 push，增量去重。**不要**在对话里手动逐条调 `dhub_session_append` 去同步本机会话——那是重复劳动且费 token。
+### 有原生插件的 agent（Codex / Pi / Claude Code）
+
+本机会话转录由**原生插件自动完成**（Codex hooks / Pi extension / Claude Code hooks），会话结束自动 push，增量去重。**不要**在对话里手动逐条调 `dhub_session_append` 去同步本机会话——那是重复劳动且费 token。
 
 只有用户明确要求"把当前对话存到 D-Hub"时，才手动调 `dhub_session_create` + `dhub_session_append` 一次。
+
+### Minis（本机，无原生插件）
+
+Minis 本机跑一次 `dhub-uploader --minis-sessions`，把全部资产原样推到云端：
+
+```bash
+cd /var/minis/workspace/d-hub
+PYTHONPATH=src python3 -m dhub.uploader \
+  --source minis --minis-sessions \
+  --url "$DHUB_URL" \
+  --api-key "$(cat /var/minis/workspace/d-hub/.dhub-admin-key)" \
+  --namespace agents/minis --agent-id minis
+```
+
+**同步原则（存原始格式，不改写）**：上传器只做"搬运 + 补 `source=minis` 元数据"，不解析、不重构内容。Minis 的会话/记忆各自带原始字段原样传递。
+
+## Minis 资产格式说明（跨 agent 读取时要注意）
+
+Minis 同步上去的资产和其他 agent（Pi/Codex）**格式不同**，查询层按 `metadata` 区分，别当成同一 schema：
+
+| 维度 | Minis（`source=minis`） | Pi / Codex |
+|---|---|---|
+| 会话消息 role | 仅 `user` / `assistant` | 含 `user`/`assistant`/`tool`/`system` |
+| 工具调用 | **没有独立 tool 条目**，工具调用已折叠进 assistant 的叙述文本里（`format: legacy-narrative`） | 独立 `tool` 条目 |
+| 每条消息字段 | `role` / `content` / `timestamp` + `metadata{message_id, format}` | 类似，`metadata` 无 message_id |
+
+**关键**：读 Minis 会话时，遇 `metadata.format == "legacy-narrative"`，不要去找结构化 tool 条目——工具结果已内嵌在 assistant 的 `content` 文本里。查询语义要靠读整段叙述，不能按 role 过滤工具。
 
 ## 命名空间约定
 
