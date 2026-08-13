@@ -128,6 +128,62 @@ Minis 同步上去的资产和其他 agent（Pi/Codex）**格式不同**，查�
 
 **关键**：读 Minis 会话时，遇 `metadata.format == "legacy-narrative"`，不要去找结构化 tool 条目——工具结果已内嵌在 assistant 的 `content` 文本里。查询语义要靠读整段叙述，不能按 role 过滤工具。
 
+## 跨 agent 读取（获取其它 agent 提交的资产）
+
+默认 MCP 工具的 `scope=agent` 只能看到**本 agent 自己的 + global**。要看其它 agent（如 Pi coding agent）提交的资产，用 **REST API 显式传 namespace/agent_id**（需要 admin key 或对应权限）：
+
+### 读某 agent 的会话转录
+
+```bash
+# 列出某 agent 的会话
+curl -sS -G "$DHUB_URL/sessions" -H "Authorization: Bearer $DHUB_API_KEY" \
+  --data-urlencode "namespace=agents/<agent_id>" --data-urlencode "limit=100"
+
+# 读单个会话全文（含全部消息，role/content/timestamp）
+curl -sS -G "$DHUB_URL/sessions/<session_id>" -H "Authorization: Bearer $DHUB_API_KEY" \
+  --data-urlencode "namespace=agents/<agent_id>"
+```
+
+### 全文检索某 agent 的会话内容
+
+```bash
+curl -sS -G "$DHUB_URL/sessions/search" -H "Authorization: Bearer $DHUB_API_KEY" \
+  --data-urlencode "namespace=agents/<agent_id>" --data-urlencode "q=<关键词>"
+```
+
+### 语义搜索某 agent 的记忆（需 mem0）
+
+```bash
+curl -sS -X POST "$DHUB_URL/memory/search" -H "Authorization: Bearer $DHUB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"namespace":"agents/<agent_id>","agent_id":"<agent_id>","query":"<语义查询>","limit":10}'
+```
+
+### 读某 agent 的技能 / wiki
+
+```bash
+# 技能（可指定 agent_id 过滤，或 scope=global 看全局技能库）
+curl -sS "$DHUB_URL/skills?agent_id=<agent_id>" -H "Authorization: Bearer $DHUB_API_KEY"
+# wiki 页面
+curl -sS -G "$DHUB_URL/wiki/page" -H "Authorization: Bearer $DHUB_API_KEY" \
+  --data-urlencode "namespace=agents/<agent_id>" --data-urlencode "title=<页面名>"
+```
+
+### 实际资产分布（2026-08-13 核实）
+
+| agent | 会话 | 记忆 | 技能 | wiki |
+|---|---|---|---|---|
+| **Pi**（`agents/pi`） | 100+（17110 消息） | ⚠️ 空 | DK / research 等在 global | — |
+| **Minis**（`agents/minis`） | 37（14690 消息） | 16 | 13 个在 global | global 页 |
+
+**笔记**：Pi 现在的主要资产是**会话转录**（记忆为空）。跨 agent 检索时重点用 `sessions/search` + `sessions/{id}`。
+
+### 权限模型（重要）
+
+- **MCP `scope`**：`agent`=本 agent，`global`=全局共享。**读不到别的 agent 的专属命名空间**。
+- **REST + 显式 namespace**：能读任意 agent,需要 admin key（`DHUB_ADMIN_KEY`）。
+- 本机 Minis 用 `cat /var/minis/workspace/d-hub/.dhub-admin-key` 作为 admin key。
+
 ## 命名空间约定
 
 - `global` — 所有 agent 共享的共识
