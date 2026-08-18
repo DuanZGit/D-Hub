@@ -518,8 +518,10 @@ def memory_list(namespace: str = "global", agent_id: str = "shared", limit: int 
 
 
 @app.delete("/memory/{memory_id}")
-def memory_delete(memory_id: str):
-    if not memory.delete(memory_id):
+def memory_delete(
+    memory_id: str, namespace: str = "global", agent_id: str = "shared"
+):
+    if not memory.delete(memory_id, namespace, agent_id):
         raise HTTPException(404, "memory not found")
     return {"status": "ok"}
 

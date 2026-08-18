@@ -263,11 +263,23 @@ class MemoryService:
             "error": result.error,
         }
 
-    def delete(self, memory_id):
-        # legacy delete resolves scope per row; try across backends
+    def delete(self, memory_id, namespace="global", agent_id="shared"):
+        """Delete a memory within the requested namespace scope.
+
+        The namespace defaults preserve the original API contract while making
+        project and agent-scoped deletes target the same partition as get/update.
+        """
         backend = self.default_backend()
-        scope = MemoryScope(namespace="global", agent_id="shared")
-        result = backend.delete(memory_id, scope)
+        scope = self._scope(namespace, agent_id)
+        # Some providers expose delete-by-ID without accepting a scope. Verify
+        # ownership first so a caller cannot delete another namespace's record.
+        try:
+            if backend.get(memory_id, scope) is None:
+                return False
+            result = backend.delete(memory_id, scope)
+        except Exception as exc:
+            self.error = str(exc)
+            return False
         return result.status == "ok"
 
     def export(self, namespace, agent_id):

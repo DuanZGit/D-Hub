@@ -62,8 +62,8 @@ class MemoryStore:
     def update(self, namespace, agent_id, memory_id, patch):
         return self.service.update(namespace, agent_id, memory_id, patch)
 
-    def delete(self, memory_id):
-        return self.service.delete(memory_id)
+    def delete(self, memory_id, namespace="global", agent_id="shared"):
+        return self.service.delete(memory_id, namespace, agent_id)
 
     def export(self, namespace, agent_id):
         return self.service.export(namespace, agent_id)
