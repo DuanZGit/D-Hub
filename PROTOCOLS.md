@@ -115,6 +115,23 @@ curl -H "Authorization: Bearer $DHUB_ADMIN_KEY" http://192.168.5.242:10101/agent
 ]}
 ```
 
+### 记忆后端管理（admin）
+
+- `GET /memory/backends`：列出所有后端及健康状态、默认后端。
+- `GET /memory/health`：默认后端健康。
+- `GET /memory/{id}?namespace=&agent_id=`：按 id 读取。
+- `PATCH /memory/{id}`：局部更新（content/memory_type/source/metadata）。
+- `POST /memory/export?namespace=&agent_id=`：导出该 scope 全部记录。
+
+### 跨电脑 Agent Connector（v1）
+
+详细见 `docs/Connector API.md`。
+
+- `POST /v1/connector/register`（admin）：创建 Connector Agent，返回一次性 scoped token。
+- `POST /v1/connector/heartbeat` / `poll` / `ack` / `send` / `unregister`：
+  用 scoped token 认证。
+- `GET /v1/connector/status`（admin）：查看各 agent 状态、pending/dead 队列。
+
 ## 4. Wiki
 
 ### POST /wiki/page

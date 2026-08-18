@@ -215,6 +215,43 @@ curl http://127.0.0.1:10101/health
 # 查看 "memory_backend": "mem0"
 ```
 
+### 可插拔记忆后端（MemoryBackend）
+
+D-Hub 将记忆后端抽象为可替换的 `MemoryBackend`：
+
+```text
+D-Hub REST / MCP / DSH Plugin
+              |
+       MemoryService
+              |
+       MemoryBackend Protocol
+          /       |         \
+       Mem0   TencentDB    JSON fallback
+```
+
+- 默认保持 Mem0（向量）/ JSON（降级）兼容路径，升级不自动切换。
+- 腾讯 adapter 通过显式配置启用：`DHUB_MEMORY_BACKENDS=agent_memory`。
+- 后端未配置时项目仍能正常启动；腾讯故障时 Mem0/JSON 仍可用。
+- 可选双写/双读评测（`DHUB_MEMORY_DUAL_WRITE/READ`，默认关）。
+- 查看后端状态：`GET /memory/backends`、`GET /memory/health`（admin）。
+- 协议确认与支持范围见 `docs/tencentdb-agent-memory-protocol.md`。
+
+### 跨电脑 Agent Connector
+
+不同电脑上的 DSH 通过 dsh-dhub 插件**主动出站**连接同一个 D-Hub，共享记忆、
+Wiki、状态与结构化 Agent 消息，无需开放入站端口。
+
+```text
+DSH Plugin A ─┐
+              ├── outbound HTTPS/VPN → D-Hub
+DSH Plugin B ─┘
+```
+
+- Connector API 见 `docs/Connector API.md`。
+- DSH 插件见 `plugins/dsh-dhub/`。
+- 跨电脑连接方案见 `docs/DSH跨电脑连接.md`。
+- 检索评测见 `docs/memory-eval.md`。
+
 ### 备份与恢复
 
 #### 手动备份

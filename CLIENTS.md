@@ -94,3 +94,12 @@ curl -X POST http://192.168.5.242:10101/agent/claude-code/call \
   -H "Authorization: Bearer $DHUB_ADMIN_KEY" \
   -d '{"method":"code.review","params":{"file":"/path/to/file.py","namespace":"projects/project-a"}}'
 ```
+
+## DSH（跨电脑）
+
+DSH 通过 `dsh-dhub` 插件（`plugins/dsh-dhub/`）连接 D-Hub，共享记忆、Wiki 与
+结构化 Agent 消息。它只**主动出站**连接 D-Hub，不要求 DSH 开放入站端口。
+
+- 插件安装与配置见 `plugins/dsh-dhub/README.md`。
+- Connector API 见 `docs/Connector API.md`。
+- 跨电脑连接方案（LAN / VPN / HTTPS 反向代理）见 `docs/DSH跨电脑连接.md`。

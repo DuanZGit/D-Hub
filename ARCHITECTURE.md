@@ -8,7 +8,8 @@ d-hub 一个进程包含以下模块：
 |---|---|---|
 | **Agent Registry** | `POST /register` | Agent 注册表（JSON 文件） |
 | **MCP Router** | `POST /mcp` | MCP 路由：三层合并 + JSON-RPC 转发 |
-| **Memory** | `POST /memory/*` | 记忆：直接调用 mem0ai 库 |
+| **Memory** | `POST /memory/*` | 记忆：可插拔 MemoryBackend（Mem0/腾讯/JSON fallback） |
+| **Agent Connector** | `/v1/connector/*` | 跨电脑 Agent 连接：scoped token + 持久化队列 + 审计 |
 | **Wiki** | `POST /wiki/*` | Wiki：Markdown CRUD + 全文搜索 |
 | **Skills** | `GET/PUT/DELETE /skills/*` | 技能仓库：三级目录读写 |
 | **Files** | `GET/POST/DELETE /files/*` | 文件共享：三级目录读写 |
