@@ -68,3 +68,12 @@ D-Hub 的资产分三层：
 2. 会话文件解析（该 Agent 的 JSONL 格式）
 
 消息统一规范化为 `{role: user|assistant|tool|system, content: string}` 后调 `/sessions/{id}/messages`。
+
+---
+
+## 跨设备 Agent Connector 插件（DSH）
+
+[`dsh-dhub/`](dsh-dhub/) 是一个独立 Node 包，让 DSH 通过 D-Hub 获得跨设备共享记忆、
+Wiki 与结构化 Agent 消息。它只**主动出站**连接 D-Hub，不要求 DSH 开放入站端口；
+不把任意 shell 作为远程任务接口。安装与配置见
+[`dsh-dhub/README.md`](dsh-dhub/README.md)。

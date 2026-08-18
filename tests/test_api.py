@@ -463,3 +463,36 @@ def test_files_roundtrip_and_traversal_is_rejected(client):
         ).status_code
         == 400
     )
+
+
+def test_memory_backends_and_health_endpoints(client):
+    backends = client.get("/memory/backends")
+    assert backends.status_code == 200
+    assert "backends" in backends.json()
+    health = client.get("/memory/health")
+    assert health.status_code == 200
+    assert "backend" in health.json()
+
+
+def test_memory_get_update_export(client):
+    added = client.post(
+        "/memory/add",
+        json={"namespace": "agents/codex", "agent_id": "codex",
+              "content": "store this fact"},
+    ).json()
+    mid = added["id"]
+    got = client.get(f"/memory/{mid}", params={"namespace": "agents/codex", "agent_id": "codex"})
+    assert got.status_code == 200
+    assert got.json()["content"] == "store this fact"
+    patched = client.patch(
+        f"/memory/{mid}",
+        json={"namespace": "agents/codex", "agent_id": "codex",
+              "content": "updated fact"},
+    )
+    assert patched.status_code == 200
+    exported = client.post(
+        "/memory/export",
+        params={"namespace": "agents/codex", "agent_id": "codex"},
+    )
+    assert exported.status_code == 200
+    assert len(exported.json()["records"]) == 1

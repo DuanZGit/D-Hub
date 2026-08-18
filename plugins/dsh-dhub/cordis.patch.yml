@@ -1,0 +1,15 @@
+# DSH Cordis 插件安装配置（占位符）
+# 真实 token 通过运行时环境 DHUB_AGENT_TOKEN 提供，禁止写入真实值。
+
+- insert:
+    - id: dsh-dhub
+      name: dsh-dhub
+      config:
+        dhubUrl: "https://example.invalid/dhub"
+        agentId: "example-agent"
+        tokenEnv: "DHUB_AGENT_TOKEN"
+        recallEnabled: true
+        captureEnabled: true
+        connectorEnabled: true
+        recallTokenBudget: 1800
+        uploadMaxBytes: 20000

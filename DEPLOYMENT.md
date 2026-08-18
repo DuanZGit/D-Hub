@@ -74,3 +74,26 @@ systemctl list-timers 'dhub-*'
 - [ ] Skills 读写正常
 - [ ] 记忆↔Wiki 同步和每日备份 timer 正常
 - [ ] Dashboard 可访问（:10101/ui）
+
+## 迁移与回滚（v0.4.0）
+
+### 迁移
+- 默认记忆后端保持 mem0 / json 兼容路径，升级**不会自动切换**后端。
+- 若要启用腾讯 adapter，需显式配置：
+  ```env
+  DHUB_MEMORY_BACKENDS=mem0,agent_memory
+  DHUB_AGENT_MEMORY_URL=...
+  DHUB_AGENT_MEMORY_API_KEY=...
+  DHUB_AGENT_MEMORY_SERVICE_ID=...
+  ```
+- 旧 `/memory/*` API 完全兼容，无需改动客户端。
+
+### 回滚
+- 回滚到旧提交：
+  ```bash
+  git checkout <上一发布版本>
+  sudo bash deploy/install.sh   # 或按实际部署方式重启
+  ```
+- 记忆数据（JSON fallback / mem0 / connector 队列）均持久化在 `DHUB_ROOT/data`，
+  回滚代码不影响已有数据。
+- 后端切换是显式配置，回滚后默认回到 mem0/json 路径。
