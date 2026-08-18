@@ -1,0 +1,22 @@
+# dsh-dhub 插件配置样例（占位符，勿提交真实值）
+
+dhubUrl: "https://example.invalid/dhub"
+agentId: "example-agent"
+# 真实 token 通过运行时环境变量提供（见 tokenEnv）
+tokenEnv: "DHUB_AGENT_TOKEN"
+project: ""
+
+# 记忆召回
+recallEnabled: true
+recallTokenBudget: 1800
+recallLimit: 10
+
+# 会话捕获
+captureEnabled: true
+uploadMaxBytes: 20000
+captureInclude: ["user", "assistant", "tool-summary"]
+
+# Connector
+connectorEnabled: true
+heartbeatIntervalSec: 30
+pollIntervalSec: 5
