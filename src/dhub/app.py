@@ -442,6 +442,68 @@ def memory_search(body: MemorySearch):
     return memory.search(**body.model_dump())
 
 
+@app.get("/memory/backends")
+def memory_backends():
+    return {
+        "backends": [
+            {"name": h.backend, "ok": h.ok, "detail": h.detail}
+            for h in memory.service.health()
+        ],
+        "default": memory.service.backend_name,
+    }
+
+
+@app.get("/memory/health")
+def memory_health():
+    health = memory.service.primary_health()
+    return {
+        "backend": health.backend,
+        "ok": health.ok,
+        "detail": health.detail,
+    }
+
+
+@app.get("/memory/{memory_id}")
+def memory_get(
+    memory_id: str, namespace: str = "global", agent_id: str = "shared"
+):
+    record = memory.get(namespace, agent_id, memory_id)
+    if record is None:
+        raise HTTPException(404, "memory not found")
+    return record
+
+
+class MemoryPatchBody(BaseModel):
+    namespace: str = "global"
+    agent_id: str = "shared"
+    content: str | None = None
+    memory_type: str | None = None
+    source: str | None = None
+    metadata: dict | None = None
+
+
+@app.patch("/memory/{memory_id}")
+def memory_update(memory_id: str, body: MemoryPatchBody):
+    patch = {}
+    if body.content is not None:
+        patch["content"] = body.content
+    if body.memory_type is not None:
+        patch["memory_type"] = body.memory_type
+    if body.source is not None:
+        patch["source"] = body.source
+    if body.metadata is not None:
+        patch["metadata"] = body.metadata
+    result = memory.update(body.namespace, body.agent_id, memory_id, patch)
+    if result["status"] == "error":
+        raise HTTPException(404, "memory not found")
+    return result
+
+
+@app.post("/memory/export")
+def memory_export(namespace: str = "global", agent_id: str = "shared"):
+    return {"records": memory.export(namespace, agent_id)}
+
+
 @app.get("/memory")
 def memory_list(namespace: str = "global", agent_id: str = "shared", limit: int = 100):
     return memory.list(namespace, agent_id, limit)
