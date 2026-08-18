@@ -28,6 +28,7 @@ from .config import (
     namespace_parts,
     safe_part,
 )
+from .connector import ConnectorStore
 from .files import NamespaceFiles, SkillStore
 from .mcp import McpRouter
 from .memory import MemoryStore
@@ -40,6 +41,7 @@ ensure_layout()
 state, memory, wiki = AppState(), MemoryStore(), WikiStore()
 files, skills = NamespaceFiles(), SkillStore()
 sessions = SessionStore()
+connector = ConnectorStore()
 mcp = McpRouter(native=NativeMcpTools(memory, wiki, skills, files, sessions))
 sync = SemanticSync(memory, wiki)
 app = FastAPI(
@@ -133,6 +135,11 @@ async def request_metrics(request: Request, call_next):
         or request.url.path == "/ui"
         or request.url.path.startswith("/ui/")
     )
+    # Connector data-plane endpoints authenticate with their own scoped token,
+    # not the admin key; register/status stay admin-only.
+    connector_data = request.url.path.startswith("/v1/connector/") and not (
+        request.url.path in {"/v1/connector/register", "/v1/connector/status"}
+    )
     authorization = request.headers.get("Authorization", "")
     bearer = authorization[7:] if authorization.lower().startswith("bearer ") else ""
     supplied_key = bearer or request.headers.get("X-API-Key", "")
@@ -141,6 +148,7 @@ async def request_metrics(request: Request, call_next):
         ADMIN_KEY
         and not public
         and not mcp_request
+        and not connector_data
         and not hmac.compare_digest(supplied_key, ADMIN_KEY)
     ):
         state.audit.write(
@@ -685,6 +693,139 @@ async def agent_call(agent_id: str, body: AgentCall):
     except httpx.HTTPError as exc:
         raise HTTPException(502, f"agent call failed: {exc}") from exc
     return {"result": response.json(), "source_agent": agent_id}
+
+
+# ---------------------------------------------------------------------------
+# Cross-device Agent Connector (v1)
+# ---------------------------------------------------------------------------
+
+class ConnectorRegister(BaseModel):
+    agent_id: str
+    agent_name: str | None = None
+    owner: str | None = None
+    namespace: str = "global"
+    project: str | None = None
+    capabilities: list[str] = Field(default_factory=list)
+
+
+class ConnectorHeartbeat(BaseModel):
+    agent_id: str
+    status: str | None = None
+
+
+class ConnectorPoll(BaseModel):
+    agent_id: str
+    project: str | None = None
+    limit: int = Field(10, ge=1, le=100)
+
+
+class ConnectorAck(BaseModel):
+    agent_id: str
+    message_id: str
+
+
+class ConnectorSend(BaseModel):
+    sender_agent_id: str
+    recipient_agent_id: str | None = None
+    recipient_scope: str | None = None
+    namespace: str = "global"
+    project_id: str | None = None
+    session_id: str | None = None
+    type: str = "task"
+    payload: dict = Field(default_factory=dict)
+    idempotency_key: str | None = None
+    expires_at: str | None = None
+    required_capability: str | None = None
+    requires_user_approval: bool = False
+
+
+class ConnectorRegisterOut(BaseModel):
+    status: str = "ok"
+    agent_id: str
+    api_key: str | None = None  # one-time scoped token
+
+
+def _connector_auth(agent_id: str, request: Request, project: str | None = None):
+    authorization = request.headers.get("Authorization", "")
+    bearer = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+    supplied = bearer or request.headers.get("X-API-Key", "")
+    if not connector.authenticate(agent_id, supplied, project):
+        raise HTTPException(
+            401,
+            "valid connector agent token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@app.post("/v1/connector/register", include_in_schema=False)
+def connector_register(body: ConnectorRegister):
+    # registration is an admin-level operation (creates a scoped token)
+    result = connector.register(body.model_dump())
+    state.audit.write(
+        "connector.register", True, agent_id=result["agent_id"], namespace=body.namespace
+    )
+    return result
+
+
+@app.post("/v1/connector/heartbeat")
+def connector_heartbeat(body: ConnectorHeartbeat, request: Request):
+    _connector_auth(body.agent_id, request)
+    status = body.status or "online"
+    connector.set_status(body.agent_id, status)
+    return {"status": "ok", "agent_id": body.agent_id, "connector_status": status}
+
+
+@app.post("/v1/connector/poll")
+def connector_poll(body: ConnectorPoll, request: Request):
+    _connector_auth(body.agent_id, request, body.project)
+    connector.set_status(body.agent_id, "online")
+    messages = connector.poll(body.agent_id, body.project, body.limit)
+    return {"status": "ok", "messages": messages, "count": len(messages)}
+
+
+@app.post("/v1/connector/ack")
+def connector_ack(body: ConnectorAck, request: Request):
+    _connector_auth(body.agent_id, request)
+    if not connector.ack(body.agent_id, body.message_id):
+        raise HTTPException(404, "message not found or not addressed to agent")
+    return {"status": "ok", "message_id": body.message_id}
+
+
+@app.post("/v1/connector/send")
+def connector_send(body: ConnectorSend, request: Request):
+    _connector_auth(body.sender_agent_id, request, body.project_id)
+    data = body.model_dump()
+    # enforce capability requirement on the sender
+    if body.required_capability:
+        sender = connector.get_agent(body.sender_agent_id)
+        if body.required_capability not in (sender.get("capabilities") or []):
+            raise HTTPException(403, "sender lacks required capability")
+    try:
+        result = connector.enqueue(data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    state.audit.write(
+        "connector.send",
+        True,
+        sender=body.sender_agent_id,
+        recipient=body.recipient_agent_id,
+        message_id=result["id"],
+    )
+    return result
+
+
+@app.get("/v1/connector/status")
+def connector_status(agent_id: str | None = None):
+    return connector.status(agent_id)
+
+
+@app.post("/v1/connector/unregister")
+def connector_unregister(agent_id: str, request: Request):
+    _connector_auth(agent_id, request)
+    if not connector.unregister(agent_id):
+        raise HTTPException(404, "connector agent not found")
+    state.audit.write("connector.unregister", True, agent_id=agent_id)
+    return {"status": "ok", "agent_id": agent_id}
 
 
 @app.post("/sync/trigger")
