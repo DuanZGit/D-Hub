@@ -161,12 +161,17 @@ class MemoryService:
         return MemoryScope(namespace=namespace, agent_id=agent_id)
 
     def _record(self, namespace, agent_id, content, metadata=None) -> MemoryRecord:
+        meta = metadata or {}
+        raw_source = meta.get("source")
+        valid_sources = {"user", "agent", "session", "wiki", "imported", "system"}
+        source = raw_source if raw_source in valid_sources else "agent"
         return MemoryRecord(
             content=content,
             namespace=namespace,
             agent_id=agent_id,
-            metadata=metadata or {},
-            source=(metadata or {}).get("source", "agent"),
+            metadata=meta,
+            source=source,
+            provenance=meta.get("provenance"),
         )
 
     # -- public ops (mirror original MemoryStore API) --------------------
