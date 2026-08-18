@@ -496,3 +496,35 @@ def test_memory_get_update_export(client):
     )
     assert exported.status_code == 200
     assert len(exported.json()["records"]) == 1
+
+
+def test_memory_delete_respects_namespace_scope(client):
+    added = client.post(
+        "/memory/add",
+        json={
+            "namespace": "agents/codex",
+            "agent_id": "codex",
+            "content": "delete this scoped fact",
+        },
+    ).json()
+    memory_id = added["id"]
+
+    wrong_scope = client.delete(
+        f"/memory/{memory_id}",
+        params={"namespace": "global", "agent_id": "shared"},
+    )
+    assert wrong_scope.status_code == 404
+    assert client.get(
+        f"/memory/{memory_id}",
+        params={"namespace": "agents/codex", "agent_id": "codex"},
+    ).status_code == 200
+
+    deleted = client.delete(
+        f"/memory/{memory_id}",
+        params={"namespace": "agents/codex", "agent_id": "codex"},
+    )
+    assert deleted.status_code == 200
+    assert client.get(
+        f"/memory/{memory_id}",
+        params={"namespace": "agents/codex", "agent_id": "codex"},
+    ).status_code == 404
