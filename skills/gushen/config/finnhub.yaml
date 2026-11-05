@@ -1,0 +1,12 @@
+# Finnhub 配置（免费版）
+# 申请地址：https://finnhub.io/register
+# 真实值请通过 minis 环境变量配置，不要写死在文件里
+api_key: "${FINNHUB_KEY}"
+webhook_secret: "${FINNHUB_WEBHOOK_SECRET:-}"
+rate_limit: 60  # 免费版 60 次/分钟
+
+# Webhook 配置（可选）
+webhook:
+  enabled: false
+  secret: "${FINNHUB_WEBHOOK_SECRET:-}"
+  endpoint: ""  # 你的回调地址

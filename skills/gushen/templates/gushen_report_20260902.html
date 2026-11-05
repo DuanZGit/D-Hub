@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>股神日报 · 2026-09-02</title>
+<style>
+:root{--bg:#0b0e13;--surface:#12161f;--surface2:#171c27;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.13);--text:#e8ecf2;--text2:#9aa4b2;--text3:#5d6675;--up:#ff4d5e;--upbg:rgba(255,77,94,.12);--down:#00c767;--downbg:rgba(0,199,103,.12);--accent:#e8b04b;--blue:#7d9cff;--r:10px}
+*{margin:0;padding:0;box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','PingFang SC','Noto Sans SC',sans-serif;background:var(--bg);color:var(--text);line-height:1.55;letter-spacing:.01em;padding-bottom:48px;font-feature-settings:'tnum' 1}.num{font-variant-numeric:tabular-nums}.u{color:var(--up)}.d{color:var(--down)}.n{color:var(--text2)}
+body>*:not(#ambient):not(.ambient-note){position:relative;z-index:1}#ambient{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.52;background:radial-gradient(ellipse at 18% 10%,rgba(232,176,75,.07),transparent 35%),radial-gradient(ellipse at 86% 74%,rgba(0,199,103,.035),transparent 40%),var(--bg)}#ambient canvas{display:block;width:100%;height:100%}.ambient-note{position:fixed;right:12px;bottom:9px;z-index:2;color:var(--text3);font-size:9px;letter-spacing:.08em;pointer-events:none;opacity:.55}
+@media(prefers-reduced-motion:reduce){#ambient{opacity:.2}.ambient-note{display:none}}@media(max-width:480px){#ambient{opacity:.38}}
+.masthead{padding:38px 20px 22px;border-bottom:1px solid var(--line)}.eyebrow{font-size:11px;font-weight:700;letter-spacing:.22em;color:var(--accent);text-transform:uppercase}.masthead h1{font-size:26px;line-height:1.22;letter-spacing:-.03em;margin-top:8px}.masthead h1 span{font-weight:500;color:var(--text3)}.mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:14px}.mast-date{font-size:12px;color:var(--text2)}.status{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;font-size:10px;font-weight:700;color:var(--accent);background:rgba(232,176,75,.1);border:1px solid rgba(232,176,75,.25)}.status::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}.freshness{display:block;margin-top:10px;color:var(--text3);font-size:10px}.lede{margin-top:13px;color:var(--text2);font-size:13.5px;line-height:1.75}.lede strong{color:var(--text)}
+.gates{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:14px 20px 0}.gate{padding:7px 2px;text-align:center;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--text3);font-size:9px;font-weight:700;letter-spacing:.05em}.gate.pass{color:var(--accent);background:var(--surface2);border-color:var(--line2)}
+.section{padding:25px 20px 0}.head{display:flex;align-items:baseline;gap:9px;margin-bottom:12px}.head h2{font-size:15px;line-height:1.2;white-space:nowrap}.head .rule{height:1px;flex:1;background:var(--line)}.head .meta{color:var(--text3);font-size:10px;white-space:nowrap}.section-lede{font-size:12px;color:var(--text3);margin:-4px 0 12px;line-height:1.6}
+/* Action-first */
+.action-hero{margin:18px 20px 0;border:1px solid rgba(232,176,75,.38);border-radius:var(--r);background:linear-gradient(135deg,rgba(232,176,75,.13),rgba(18,22,31,.96) 46%);padding:17px}.action-label{font-size:10px;font-weight:800;letter-spacing:.18em;color:var(--accent)}.action-main{margin-top:6px;font-size:21px;font-weight:800;letter-spacing:-.02em}.action-main span{color:var(--accent)}.action-sub{margin-top:7px;color:var(--text2);font-size:13px;line-height:1.65}.action-list{display:flex;flex-direction:column;margin-top:14px;border-top:1px solid rgba(232,176,75,.18)}.action-item{display:grid;grid-template-columns:72px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:12.5px}.action-item:last-child{border-bottom:0}.action-key{font-size:11px;color:var(--accent);font-weight:700}.action-value{color:var(--text2)}.action-value strong{color:var(--text)}
+.time-plan{display:grid;grid-template-columns:1fr;gap:8px}.horizon{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 14px}.horizon-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}.horizon-title{font-size:13px;font-weight:700}.horizon-time{font-size:10px;color:var(--accent);font-weight:700}.horizon p{font-size:12.5px;color:var(--text2);line-height:1.7}.trigger{margin-top:7px;color:var(--text3);font-size:11px}.trigger strong{color:var(--text2)}
+/* Current state */
+.chart-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;color:var(--text2);font-size:10px}.legend-item{display:inline-flex;align-items:center;gap:4px}.legend-dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}.legend-dot.blue{background:var(--blue)}.legend-dot.green{background:var(--down)}
+.hold-list,.event-list,.fact-list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}.row:last-child{border-bottom:0}.nm{font-size:13px;font-weight:700}.cd{font-size:10px;color:var(--text3);margin-top:1px}.px{text-align:right}.pv{font-size:13.5px;font-weight:800}.pc{font-size:11px;font-weight:700;margin-top:1px}
+.sector-grid{display:grid;grid-template-columns:1fr;gap:8px}.sector{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}.sector-head{display:flex;justify-content:space-between;align-items:center;padding:10px 13px;background:var(--surface2);border-bottom:1px solid var(--line)}.sector-name{font-size:12px;font-weight:800}.badge{padding:3px 7px;border-radius:5px;font-size:10px;font-weight:800}.badge.up{color:var(--up);background:var(--upbg)}.badge.down{color:var(--down);background:var(--downbg)}.badge.flat{color:var(--text2);background:rgba(154,164,178,.1)}
+/* Summary before detail */
+.summary-stack{display:flex;flex-direction:column;gap:8px}.summary-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 14px}.summary-card-top{display:flex;justify-content:space-between;align-items:center;gap:10px}.summary-card h3{font-size:13px}.summary-card .score{font-size:14px;font-weight:800;color:var(--accent)}.summary-card p{font-size:12.5px;color:var(--text2);line-height:1.7;margin-top:6px}.summary-card p strong{color:var(--text)}
+/* Agent detail */
+.agent-list{display:flex;flex-direction:column;gap:9px}.agent{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 14px}.agent.trading{border-left:2px solid rgba(125,156,255,.55)}.agent-top{display:flex;align-items:center;gap:9px}.avatar{width:28px;height:28px;border-radius:7px;background:var(--accent);color:#0b0e13;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;flex-shrink:0}.trading .avatar{background:var(--blue)}.agent-name{font-size:13px;font-weight:800}.agent-role{color:var(--text3);font-size:10px;margin-top:1px}.agent-score{margin-left:auto;text-align:right;color:var(--accent);font-size:15px;font-weight:900}.agent-score small{display:block;color:var(--text3);font-size:9px;letter-spacing:.06em}.agent-body{margin-top:9px;color:var(--text2);font-size:12.5px;line-height:1.7}.agent-body strong{color:var(--text)}.agent-conclusion{border-top:1px dashed var(--line2);padding-top:8px;margin-top:9px;font-size:12px;font-weight:700;color:var(--text)}.agent-conclusion::before{content:'▸';color:var(--accent);margin-right:7px}
+.xcheck{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}.xrow{display:flex;border-bottom:1px solid var(--line)}.xrow:last-child{border-bottom:0}.xkey{width:76px;flex-shrink:0;padding:11px 12px;background:var(--surface2);color:var(--accent);font-size:10px;font-weight:800;display:flex;align-items:center}.xval{padding:11px 12px;color:var(--text2);font-size:12.5px;line-height:1.7}.xval strong{color:var(--text)}
+/* History and conclusion */
+.review{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;margin-bottom:8px}.review-top{display:flex;justify-content:space-between;align-items:baseline}.review-title{font-size:13px;font-weight:800}.review-pnl{font-size:14px;font-weight:900}.review-meta{font-size:10.5px;color:var(--text3);margin-top:4px}.review-body{font-size:12px;line-height:1.7;color:var(--text2);margin-top:7px}.review-body strong{color:var(--text)}.final{background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--line2);border-radius:var(--r);padding:16px}.final-label{color:var(--accent);font-size:10px;font-weight:800;letter-spacing:.16em}.final h2{font-size:18px;margin-top:6px}.final p{color:var(--text2);font-size:13px;line-height:1.75;margin-top:7px}.final p strong{color:var(--text)}.final-list{margin-top:10px;display:flex;flex-direction:column;gap:5px}.final-item{font-size:12px;color:var(--text2);padding-left:12px;position:relative}.final-item::before{content:'·';position:absolute;left:0;color:var(--accent);font-weight:900}
+.risk{background:var(--surface);border-left:3px solid var(--up);border-radius:0 var(--r) var(--r) 0;padding:12px 14px}.risk-item{font-size:12.5px;color:var(--text2);line-height:1.65;padding:5px 0}.risk-item strong{color:var(--text)}.quality{font-size:11px;color:var(--text3);line-height:1.7}.quality strong{color:var(--text2)}footer{margin:32px 20px 0;padding-top:15px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:baseline}footer .brand{font-size:10px;font-weight:800;letter-spacing:.18em;color:var(--text3)}footer .stamp{font-size:10px;color:var(--text3);text-align:right}
+@media(min-width:700px){body{max-width:960px;margin:0 auto}.masthead{padding-left:32px;padding-right:32px}.section{padding-left:32px;padding-right:32px}.action-hero{margin-left:32px;margin-right:32px}.gates{margin-left:32px;margin-right:32px}.time-plan{grid-template-columns:repeat(3,1fr)}.sector-grid{grid-template-columns:repeat(3,1fr)}.agent-list{display:grid;grid-template-columns:1fr 1fr}.agent-list .agent:last-child:nth-child(odd){grid-column:1/-1}}
+@media(max-width:360px){.index-value{font-size:15px}.action-item{grid-template-columns:62px 1fr}.xkey{width:66px;padding-left:9px;padding-right:9px}}
+</style>
+</head>
+<body>
+<div id="ambient" aria-hidden="true"></div>
+<div class="ambient-note">AMBIENT / LOW POWER</div>
+
+<header class="masthead" data-gate="data-gate">
+  <div class="eyebrow">Gushen · Equity Brief</div>
+  <h1>美股组合 <span>/ 高位回调，等待 AVGO 验证</span></h1>
+  <div class="mast-row">
+    <div class="mast-date num">2026年9月2日 周三 · 收盘快照 16:00 ET</div>
+    <span class="status">CLOSE_SNAPSHOT</span>
+  </div>
+  <span class="freshness num">取得 2026-09-02 12:20 CST / 2026-09-02 04:20 UTC · 源时间 2026-09-01 16:00 ET · 美国 CLOSED · CLOSE_SNAPSHOT</span>
+  <p class="lede"><strong>9 月首个交易日全线回调</strong>，QQQ −1.27%、SPY −0.69%、道指 −0.72%，仅 VZ 逆势 +0.56% 收于 $50.30。组合总市值 <strong class="num">$2,803.37</strong>、浮盈 <strong class="num">+$46.05 (+1.67%)</strong>，较昨日回撤约 $7。SGOV 仍占 43.0%，是 9 月首要再平衡项；今晚盘后 <strong>AVGO Q3（EPS $3.30 / $29.95B）</strong>是 AI 链二次验证。</p>
+</header>
+
+<div class="gates" aria-label="执行契约 Gate 状态">
+  <div class="gate pass">A DATA</div>
+  <div class="gate pass">B VALUE</div>
+  <div class="gate pass">C TRADING</div>
+  <div class="gate pass">D X-CHECK</div>
+  <div class="gate pass">E DECIDE</div>
+</div>
+
+<div class="action-hero" data-gate="decision-gate">
+  <div class="action-label">NOW · 现在做什么</div>
+  <div class="action-main">今天 <span>持有不动</span>，等 AVGO 财报验证</div>
+  <p class="action-sub">全市场回调但未破关键位，<strong>VZ / JPM / QQQ / GOOG 均不触发买卖</strong>。NVDA 随大盘 −1.51% 至 $217.44，量能 1.1 亿、未破趋势；今晚 AVGO 盘后是 AI 芯片链最重要的二次确认，左侧加仓无优势。</p>
+  <div class="action-list">
+    <div class="action-item"><span class="action-key">今日动作</span><span class="action-value"><strong>持有全部 6 标的</strong> · 不加仓、不减仓、不调 SGOV。</span></div>
+    <div class="action-item"><span class="action-key">关键价位</span><span class="action-value num">NVDA 支撑 $213 / 阻力 $220.41 · GOOG 支撑 $329.29 / 阻力 $333.95 · VZ 支撑 $48.50 · JPM 支撑 $353</span></div>
+    <div class="action-item"><span class="action-key">触发条件</span><span class="action-value">AVGO 盘后 beat 且上调指引 → 9/3 开盘 30 分钟内评估从 SGOV 转 5–10% 至 NVDA/AVGO；若 miss 或指引保守 → 维持观望。</span></div>
+    <div class="action-item"><span class="action-key">今日不做</span><span class="action-value">不抄底 GOOG（−2.59% 浮亏属正常波动）；不追高 VZ（RSI 66.4 偏热）；不减 SGOV。</span></div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="head"><h2>短中期计划</h2><div class="rule"></div><div class="meta">行动时间轴</div></div>
+  <div class="time-plan">
+    <div class="horizon">
+      <div class="horizon-top"><span class="horizon-title">本周 · 9/2–9/5</span><span class="horizon-time">AVGO + 非农</span></div>
+      <p><strong>9/2 盘后 AVGO Q3</strong>决定是否向 AI 链加仓；<strong>9/5 周五非农</strong>影响降息预期。若 AVGO beat ≥5% 且股价 gap up，9/3 右侧加仓 NVDA 5%。</p>
+      <p class="trigger"><strong>触发：</strong>AVGO beat + 指引上调；<strong>失效：</strong>AVGO miss 或非农大幅走弱 → 推迟 SGOV 部署。</p>
+    </div>
+    <div class="horizon">
+      <div class="horizon-top"><span class="horizon-title">未来 1 个月 · 9 月</span><span class="horizon-time">再平衡</span></div>
+      <p>把 <strong>SGOV 从 43.0% 降至 30%</strong>（约 $360 待部署）。优先：NVDA 右侧加仓、JPM 微加（PE 15.2）、或 TSM 回踩 $395 以下回接。</p>
+      <p class="trigger"><strong>触发：</strong>右侧确认（财报/技术突破）；<strong>失效：</strong>就业/CPI 走弱触发避险 → 暂停部署。</p>
+    </div>
+    <div class="horizon">
+      <div class="horizon-top"><span class="horizon-title">中期 · 1–6 个月</span><span class="horizon-time">Q4 2026</span></div>
+      <p>目标配置：核心（VZ+JPM+NVDA+QQQ）60–65%、现金 25–30%、机动 5–10%。观察：AI 算力需求增速是否 ≥30%、JPM 净息差是否企稳。</p>
+      <p class="trigger"><strong>验证：</strong>NVDA 连续两季营收增速 ≥40% → 上调目标至 $250；<strong>失效：</strong>衰退概率 &gt;40% → 现金提至 50%。</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="head"><h2>指数与板块</h2><div class="rule"></div><div class="meta">市场速览 · 9/1 收盘</div></div>
+  <div class="section-lede">三大指数同步回调，纳指领跌；防御仅 VZ 收红，AI 龙头随盘整理。</div>
+  <div class="index-grid">
+    <div class="index"><div class="index-name">纳指 100 ETF · QQQ</div><div class="index-value num">707.64</div><div class="index-change d num">−1.27%</div><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><path d="M0.0,9.2 L7.1,4.0 L14.3,4.6 L21.4,5.4 L28.6,13.0 L35.7,13.9 L42.9,17.1 L50.0,15.6 L57.1,20.0 L64.3,17.3 L71.4,16.9 L78.6,10.8 L85.7,13.7 L92.9,13.5 L100.0,19.2" fill="none" stroke="#00c767" stroke-width="1.5"/></svg></div>
+    <div class="index"><div class="index-name">标普 500 ETF · SPY</div><div class="index-value num">761.78</div><div class="index-change d num">−0.69%</div><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><path d="M0.0,9.4 L7.1,4.0 L14.3,5.5 L21.4,9.2 L28.6,14.4 L35.7,12.8 L42.9,19.2 L50.0,16.1 L57.1,18.3 L64.3,15.9 L71.4,15.7 L78.6,10.7 L85.7,12.5 L92.9,14.8 L100.0,20.0" fill="none" stroke="#00c767" stroke-width="1.5"/></svg></div>
+    <div class="index"><div class="index-name">道指 ETF · DIA</div><div class="index-value num">527.75</div><div class="index-change d num">−0.72%</div><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><path d="M0.0,5.2 L7.1,4.0 L14.3,5.7 L21.4,9.7 L28.6,11.7 L35.7,9.6 L42.9,20.0 L50.0,12.8 L57.1,10.6 L64.3,8.1 L71.4,9.7 L78.6,8.1 L85.7,8.4 L92.9,13.8 L100.0,19.6" fill="none" stroke="#00c767" stroke-width="1.5"/></svg></div>
+  </div>
+  <div class="sector-grid" style="margin-top:10px">
+    <div class="sector"><div class="sector-head"><span class="sector-name">强势 · 防御</span><span class="badge up">+0.56%</span></div>
+      <div class="row"><div><div class="nm">VZ</div><div class="cd">Verizon · 电信防御</div></div><div class="px"><div class="pv num">$50.30</div><div class="pc u num">+0.56%</div></div></div>
+    </div>
+    <div class="sector"><div class="sector-head"><span class="sector-name">中性 · 金融/现金</span><span class="badge flat">−0.3% ~ +0.03%</span></div>
+      <div class="row"><div><div class="nm">JPM</div><div class="cd">摩根大通 · PE 15.21</div></div><div class="px"><div class="pv num">$354.95</div><div class="pc d num">−0.30%</div></div></div>
+      <div class="row"><div><div class="nm">SGOV</div><div class="cd">0-3M 国债 · 现金</div></div><div class="px"><div class="pv num">$100.41</div><div class="pc u num">+0.03%</div></div></div>
+    </div>
+    <div class="sector"><div class="sector-head"><span class="sector-name">弱势 · AI/科技</span><span class="badge down">−1% ~ −1.5%</span></div>
+      <div class="row"><div><div class="nm">NVDA</div><div class="cd">英伟达 · AI 算力</div></div><div class="px"><div class="pv num">$217.44</div><div class="pc d num">−1.51%</div></div></div>
+      <div class="row"><div><div class="nm">GOOG</div><div class="cd">Alphabet · 搜索</div></div><div class="px"><div class="pv num">$332.03</div><div class="pc d num">−1.01%</div></div></div>
+      <div class="row"><div><div class="nm">QQQ</div><div class="cd">纳指 100</div></div><div class="px"><div class="pv num">$707.64</div><div class="pc d num">−1.27%</div></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="head"><h2>当前持仓</h2><div class="rule"></div><div class="meta num">总市值 $2,803.37 · 浮盈 +$46.05 (+1.67%) · SGOV 43.0%</div></div>
+  <div class="hold-list">
+    <div class="row"><div><div class="nm">iShares 0-3M Treas · SGOV</div><div class="cd">现金 · 12 股 · 成本 $100.56 · 快照 2026-09-01 16:00 ET</div></div><div class="px"><div class="pv num">$100.41</div><div class="pc d num">−$1.76 (−0.15%)</div></div></div>
+    <div class="row"><div><div class="nm">JPMorgan · JPM</div><div class="cd">核心 · 2 股 · 成本 $349.98</div></div><div class="px"><div class="pv num">$354.95</div><div class="pc u num">+$9.94 (+1.42%)</div></div></div>
+    <div class="row"><div><div class="nm">Verizon · VZ</div><div class="cd">防御 · 10 股 · 成本 $45.68 · 8/24 部分止盈至 10 股</div></div><div class="px"><div class="pv num">$50.30</div><div class="pc u num">+$46.21 (+10.12%)</div></div></div>
+    <div class="row"><div><div class="nm">Alphabet · GOOG</div><div class="cd">核心 · 1 股 · 成本 $340.86 · 8/12 回接</div></div><div class="px"><div class="pv num">$332.03</div><div class="pc d num">−$8.83 (−2.59%)</div></div></div>
+    <div class="row"><div><div class="nm">Invesco QQQ</div><div class="cd">核心 · 0.0677 股 · 成本 $706.65</div></div><div class="px"><div class="pv num">$707.64</div><div class="pc u num">+$0.07 (+0.14%)</div></div></div>
+    <div class="row"><div><div class="nm">NVIDIA · NVDA</div><div class="cd">核心 · 0.0258 股 · 成本 $201.16</div></div><div class="px"><div class="pv num">$217.44</div><div class="pc u num">+$0.42 (+8.09%)</div></div></div>
+  </div>
+  <div class="chart-card" aria-label="组合暴露图">
+    <div class="chart-title">Portfolio Exposure · 组合暴露关系</div>
+    <div class="chart-caption">圆环 = 市值占比 · 金=核心 蓝=防御/成长 绿=现金 · 线段仅表示类别关联，不代表权重</div>
+    <svg class="exposure-svg" viewBox="0 0 360 170" role="img" aria-label="组合市值占比圆环图">
+      <g transform="translate(88,85)">
+        <circle r="58" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="16"/>
+        <circle r="58" fill="none" stroke="#00c767" stroke-width="16" stroke-linecap="round" stroke-dasharray="156.7 207.7" stroke-dashoffset="0" transform="rotate(-90)"/>
+        <circle r="58" fill="none" stroke="#e8b04b" stroke-width="16" stroke-linecap="round" stroke-dasharray="92.2 272.2" stroke-dashoffset="-156.7" transform="rotate(-90)"/>
+        <circle r="58" fill="none" stroke="#7d9cff" stroke-width="16" stroke-linecap="round" stroke-dasharray="65.2 299.2" stroke-dashoffset="-248.9" transform="rotate(-90)"/>
+        <circle r="58" fill="none" stroke="#f0c97a" stroke-width="16" stroke-linecap="round" stroke-dasharray="43.2 321.2" stroke-dashoffset="-314.1" transform="rotate(-90)"/>
+        <circle r="58" fill="none" stroke="#c9a96a" stroke-width="16" stroke-linecap="round" stroke-dasharray="6.9 357.5" stroke-dashoffset="-357.3" transform="rotate(-90)"/>
+        <text text-anchor="middle" dy="-6" font-size="13" font-weight="800" fill="#e8ecf2">$2.80k</text>
+        <text text-anchor="middle" dy="10" font-size="9" fill="#9aa4b2">总市值</text>
+      </g>
+      <g font-size="10.5" fill="#e8ecf2">
+        <circle cx="176" cy="28" r="5" fill="#00c767"/><text x="186" y="31" font-weight="700">SGOV 现金 43.0% · $1,204.92</text><text x="186" y="43" font-size="9" fill="#9aa4b2">12 股 · −0.15% · 安全垫</text>
+        <circle cx="176" cy="58" r="5" fill="#e8b04b"/><text x="186" y="62" font-weight="700">JPM 核心 25.3% · $709.90</text><text x="186" y="74" font-size="9" fill="#9aa4b2">2 股 · +1.42% · PE 15.2</text>
+        <circle cx="176" cy="89" r="5" fill="#7d9cff"/><text x="186" y="93" font-weight="700">VZ 防御 17.9% · $503.00</text><text x="186" y="105" font-size="9" fill="#9aa4b2">10 股 · +10.12% · MA5&gt;MA20</text>
+        <circle cx="176" cy="120" r="5" fill="#f0c97a"/><text x="186" y="124" font-weight="700">GOOG 核心 11.8% · $332.03</text><text x="186" y="136" font-size="9" fill="#9aa4b2">1 股 · −2.59% · PE 16.7</text>
+        <circle cx="176" cy="149" r="4" fill="#c9a96a"/><text x="186" y="152" font-weight="600">QQQ 1.7% · NVDA 0.2% · 合计 1.9%</text>
+      </g>
+    </svg>
+    <div class="alloc-bar" aria-hidden="true"><span class="alloc-seg" style="width:43.0%;background:#00c767"></span><span class="alloc-seg" style="width:25.3%;background:#e8b04b"></span><span class="alloc-seg" style="width:17.9%;background:#7d9cff"></span><span class="alloc-seg" style="width:11.8%;background:#f0c97a"></span><span class="alloc-seg" style="width:1.9%;background:#c9a96a"></span></div>
+    <div class="alloc-labels"><span><i style="background:#00c767"></i>现金 43.0%</span><span><i style="background:#e8b04b"></i>核心 38.9%</span><span><i style="background:#7d9cff"></i>防御 17.9%</span><span><i style="background:#f0c97a"></i>小仓 1.9%</span></div>
+    <div class="chart-legend"><span class="legend-item"><i class="legend-dot"></i>核心</span><span class="legend-item"><i class="legend-dot blue"></i>防御/成长</span><span class="legend-item"><i class="legend-dot green"></i>现金</span><span style="margin-left:auto;color:var(--text3);font-size:10px">纯 SVG 占比图 · 无 JS 依赖</span></div>
+  </div>
+  <div class="section-lede" style="margin-top:11px">SGOV 占 43% 是当前最大再平衡压力；VZ 是唯一正贡献防御锚，JPM 估值锚稳固，NVDA/GOOG 随盘回调但未破位。</div>
+</section>
+
+<section class="section">
+  <div class="head"><h2>板块与事件</h2><div class="rule"></div><div class="meta">驱动因素</div></div>
+  <div class="sector-grid">
+    <div class="sector"><div class="sector-head"><span class="sector-name">AI 算力链</span><span class="badge down">回调</span></div><div class="row"><div><div class="nm">NVDA −1.51%</div><div class="cd">量 1.10 亿 · 等 AVGO 验证</div></div><div class="px"><div class="pv num">$217.44</div><div class="pc d num">弱势整理</div></div></div><div class="row"><div><div class="nm">AVGO −0.18%</div><div class="cd">PE 61.5 · 明晚盘后 Q3</div></div><div class="px"><div class="pv num">$369.68</div><div class="pc d num">观望</div></div></div></div>
+    <div class="sector"><div class="sector-head"><span class="sector-name">金融</span><span class="badge flat">抗跌</span></div><div class="row"><div><div class="nm">JPM −0.30%</div><div class="cd">PE 15.21 · PB 1.63</div></div><div class="px"><div class="pv num">$354.95</div><div class="pc d num">MA5&lt;MA20</div></div></div></div>
+    <div class="sector"><div class="sector-head"><span class="sector-name">防御电信</span><span class="badge up">逆势</span></div><div class="row"><div><div class="nm">VZ +0.56%</div><div class="cd">PE 13.10 · 股息锚</div></div><div class="px"><div class="pv num">$50.30</div><div class="pc u num">MA5&gt;MA20</div></div></div></div>
+  </div>
+  <div class="event-list" style="margin-top:9px">
+    <div class="row"><div><div class="nm">AVGO Q3 2026</div><div class="cd">9/02 盘后 · EPS $3.30 / 营收 $29.95B · AI 芯片链二次验证</div></div><div class="px"><div class="pc n num">今晚</div></div></div>
+    <div class="row"><div><div class="nm">MOMO / LULU</div><div class="cd">9/03 盘前/盘后 · 消费需求验证</div></div><div class="px"><div class="pc n num">9/03</div></div></div>
+    <div class="row"><div><div class="nm">美国 8 月非农</div><div class="cd">9/05 周五 · 影响降息预期与成长股估值</div></div><div class="px"><div class="pc n num">9/05</div></div></div>
+    <div class="row"><div><div class="nm">HPE Q3 / GOLD Q4</div><div class="cd">9/02 盘后同日 · 关注 AI 服务器与算力扩产信号</div></div><div class="px"><div class="pc n num">9/02</div></div></div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="head"><h2>技术快照</h2><div class="rule"></div><div class="meta">MA5 · RSI · MACD · KDJ · 布林带</div></div>
+  <div class="fact-list">
+    <div class="row"><div><div class="nm">VZ · 强势上涨</div><div class="cd">MA5 50.01 / MA20 48.68 · RSI 66.4 · MACD 0.08 · 布林 48.68–51.28</div></div><div class="px"><div class="pv num">$50.30</div><div class="pc u num">多头排列</div></div></div>
+    <div class="row"><div><div class="nm">NVDA · 弱势下跌</div><div class="cd">MA5 218.68 / MA20 219.03 · RSI 51.8 · MACD −0.68 · DIF 2.20</div></div><div class="px"><div class="pv num">$217.44</div><div class="pc d num">MA5&lt;MA20</div></div></div>
+    <div class="row"><div><div class="nm">JPM · 弱势下跌</div><div class="cd">MA5 355.86 / MA20 358.15 · RSI 51.3 · MACD −2.62 · 通道内</div></div><div class="px"><div class="pv num">$354.95</div><div class="pc n num">弱势整理</div></div></div>
+    <div class="row"><div><div class="nm">GOOG · 弱势下跌</div><div class="cd">MA5 337.43 / MA20 343.92 · RSI 40.0 · MACD −1.49 · 下轨 329.82</div></div><div class="px"><div class="pv num">$332.03</div><div class="pc d num">空头排列</div></div></div>
+    <div class="row"><div><div class="nm">QQQ · 弱势下跌</div><div class="cd">MA5 714.66 / MA20 717.97 · RSI 46.5 · MACD −1.63 · 通道内</div></div><div class="px"><div class="pv num">$707.64</div><div class="pc d num">弱势整理</div></div></div>
+    <div class="row"><div><div class="nm">TSM · 弱势下跌</div><div class="cd">MA5 418.37 / MA20 419.48 · RSI 47.8 · MACD −0.46 · 观察 $395</div></div><div class="px"><div class="pv num">$414.00</div><div class="pc d num">−4/5</div></div></div>
+  </div>
+  <div class="quality" style="margin-top:8px"><strong>术语：</strong>MA 是移动平均成本，RSI 高于 70 通常表示短期偏热，低于 30 表示短期偏弱；MACD 金叉/死叉表示趋势动能变化，不是单独的买卖信号。K 线来自 Alpha Vantage（日 K，截至 2026-09-01），与腾讯报价双源核验一致。</div>
+</section>
+
+<section class="section" data-gate="value-gate">
+  <div class="head"><h2>价值投资组汇总</h2><div class="rule"></div><div class="meta">先看长期价值</div></div>
+  <div class="summary-stack">
+    <div class="summary-card"><div class="summary-card-top"><h3>估值与安全边际</h3><div class="score num">3.6<small style="font-size:9px;color:var(--text3)">/5</small></div></div><p><strong>共识：</strong>回调反而拉开安全边际。JPM PE 15.2 / VZ PE 13.1 仍是价值锚；GOOG 跌至 PE 16.66 回到便宜区间；NVDA PE 27.5 对应 30%+ FCF 增速可接受。问题仍是 SGOV 43% 现金拖累复利。</p></div>
+    <div class="summary-card"><div class="summary-card-top"><h3>护城河与商业模式</h3><div class="score num">3.7<small style="font-size:9px;color:var(--text3)">/5</small></div></div><p><strong>共识：</strong>VZ 股息 + JPM 利差是可理解的护城河；NVDA 算力护城河需 AVGO 指引二次验证；GOOG 搜索护城河短期承压但估值已消化悲观。</p></div>
+    <div class="summary-card"><div class="summary-card-top"><h3>长期趋势</h3><div class="score num">3.9<small style="font-size:9px;color:var(--text3)">/5</small></div></div><p><strong>共识：</strong>AI 算力 5–10 年主旋律不变，AVGO 与 NVDA 指引共同决定进攻节奏；金融受益于 AI 降本 + 利差企稳。</p></div>
+  </div>
+  <div class="xcheck" style="margin-top:9px"><div class="xrow"><div class="xkey">价值投资共识</div><div class="xval">三角结构（VZ 股息/JPM 价值/NVDA 增长）依然成立；回调是加仓窗口而非卖出理由，但需等 AVGO 右侧确认后再部署 SGOV。</div></div></div>
+</section>
+
+<section class="section" data-gate="trading-gate">
+  <div class="head"><h2>Trading 组汇总</h2><div class="rule"></div><div class="meta">再看交易时机</div></div>
+  <div class="summary-stack">
+    <div class="summary-card"><div class="summary-card-top"><h3>趋势与动能</h3><div class="score num">3.0<small style="font-size:9px;color:var(--text3)">/10</small></div></div><p><strong>共识：</strong>除 VZ 外全员 MA5&lt;MA20、MACD 负值，弱势整理；无突破、无放量，动量中性偏弱。</p></div>
+    <div class="summary-card"><div class="summary-card-top"><h3>情绪与拥挤度</h3><div class="score num">3.2<small style="font-size:9px;color:var(--text3)">/10</small></div></div><p><strong>共识：</strong>回调日 VZ 逆势收红显示防御轮动；AI 链量能未放大、情绪未恐慌，等待事件驱动。</p></div>
+    <div class="summary-card"><div class="summary-card-top"><h3>风险与仓位</h3><div class="score num">4.0<small style="font-size:9px;color:var(--text3)">/10</small></div></div><p><strong>共识：</strong>最大风险是现金 43% 的机会成本，而非个股回撤；组合相关性低、流动性充足，止损线 intact。</p></div>
+  </div>
+  <div class="xcheck" style="margin-top:9px"><div class="xrow"><div class="xkey">Trading 共识</div><div class="xval">全市场弱势整理、等待 AVGO 事件；财报周内不做左侧，右侧确认后再动。</div></div></div>
+</section>
+
+<section class="section">
+  <div class="head"><h2>8 Agent 详细分析</h2><div class="rule"></div><div class="meta">独立观点 · 8/8 完整</div></div>
+  <div class="agent-list">
+    <div class="agent"><div class="agent-top"><div class="avatar">巴</div><div><div class="agent-name">巴菲特</div><div class="agent-role">估值与安全边际</div></div><div class="agent-score num">3.6<small>/5</small></div></div><div class="agent-body">VZ PE 13.1、JPM PE 15.2 仍便宜；GOOG PE 16.66 跌回买点区间（ROE 尚可、自由现金流稳）；NVDA PE 27.5 需用 PS/FCF 看，增速 30%+ 可覆盖。<strong>SGOV 43% 现金是最大估值问题</strong>——通胀下零增长。</div><div class="agent-conclusion">结论：估值端支持持有，现金端需右侧部署，评分 3.6/5。</div></div>
+    <div class="agent"><div class="agent-top"><div class="avatar">芒</div><div><div class="agent-name">芒格</div><div class="agent-role">护城河与竞争格局</div></div><div class="agent-score num">3.5<small>/5</small></div></div><div class="agent-body">VZ 的频谱与分红、JPM 的资金与风控是真护城河；NVDA 的 CUDA 生态护城河需 AVGO 指引验证是否被分流；GOOG 搜索护城河被 AI 分流是真实风险，但<strong>PE 16.6 已 price-in</strong>。</div><div class="agent-conclusion">结论：护城河未破，但 GOOG 需更低价才加仓，评分 3.5/5。</div></div>
+    <div class="agent"><div class="agent-top"><div class="avatar">段</div><div><div class="agent-name">段永平</div><div class="agent-role">商业模式与本分</div></div><div class="agent-score num">3.8<small>/5</small></div></div><div class="agent-body">VZ/JPM/NVDA 三个“懂了”——分红、利差、算力都是可理解的商业模式；GOOG 仍半懂（AI 替代路径不明）；<strong>SGOV 43% 违背“懂了就重仓”本分</strong>，应换成懂的票。</div><div class="agent-conclusion">结论：等右侧把 SGOV 换成懂的资产，评分 3.8/5。</div></div>
+    <div class="agent"><div class="agent-top"><div class="avatar">李</div><div><div class="agent-name">李录</div><div class="agent-role">长期趋势与终局</div></div><div class="agent-score num">4.0<small>/5</small></div></div><div class="agent-body">AI 算力仍是 5–10 年主趋势，AVGO 若上调全年指引则验证需求未见顶；金融的 AI 降本与利差企稳是次趋势；<strong>时间窗口在 Q4 前完成再平衡</strong>。</div><div class="agent-conclusion">结论：趋势未变，等待 AVGO 二次确认，评分 4.0/5。</div></div>
+    <div class="agent trading"><div class="agent-top"><div class="avatar">技</div><div><div class="agent-name">技术分析师</div><div class="agent-role">趋势与技术指标</div></div><div class="agent-score num">3.0<small>/10</small></div></div><div class="agent-body">VZ 唯一 MA5&gt;MA20 多头（支撑 $48.50）；NVDA/JPM/GOOG/QQQ 均 MA5&lt;MA20、MACD 负值弱势；GOOG 靠近布林下轨 329.82、RSI 40 未超卖；<strong>全员无金叉</strong>。</div><div class="agent-conclusion">结论：技术面弱势整理，等待事件突破，评分 3.0/10。</div></div>
+    <div class="agent trading"><div class="agent-top"><div class="avatar">动</div><div><div class="agent-name">动量交易员</div><div class="agent-role">短期动量与入场</div></div><div class="agent-score num">2.8<small>/10</small></div></div><div class="agent-body">9/1 无量下跌、未破位，NVDA 量 1.1 亿但未放量突破；VZ 逆势显示资金向防御轮动；<strong>动量未给出方向，需 AVGO 事件驱动</strong>。</div><div class="agent-conclusion">结论：动量中性偏弱，不左侧入场，评分 2.8/10。</div></div>
+    <div class="agent trading"><div class="agent-top"><div class="avatar">情</div><div><div class="agent-name">情绪分析师</div><div class="agent-role">情绪与市场宽度</div></div><div class="agent-score num">3.2<small>/10</small></div></div><div class="agent-body">回调但未恐慌，VIX 未飙升；AI 链情绪等待 AVGO，<strong>预期已被压低、beat 容易 gap up</strong>；板块宽度上仅防御收红。</div><div class="agent-conclusion">结论：情绪偏防御、等待事件，评分 3.2/10。</div></div>
+    <div class="agent trading"><div class="agent-top"><div class="avatar">风</div><div><div class="agent-name">风控官</div><div class="agent-role">仓位与回撤约束</div></div><div class="agent-score num">4.0<small>/10</small></div></div><div class="agent-body">现金 43% 是最大风险（机会成本）；个股集中度：VZ 17.9% / JPM 25.3% / GOOG 11.8% / SGOV 43%；<strong>最大回撤可控（TSM 已止损 −6.2%）</strong>，止损线：VZ $48.50 / GOOG $325 / JPM $353。</div><div class="agent-conclusion">结论：风控核心是降现金至 30%，而非砍仓，评分 4.0/10。</div></div>
+  </div>
+</section>
+
+<section class="section" data-gate="cross-check">
+  <div class="head"><h2>交叉验证</h2><div class="rule"></div><div class="meta">价值 × 交易</div></div>
+  <div class="xcheck">
+    <div class="xrow"><div class="xkey">共识点</div><div class="xval">现金 43% 过高是 9 月首要任务；VZ/JPM/NVDA 三角结构合理；回调未破位、无需恐慌性卖出。</div></div>
+    <div class="xrow"><div class="xkey">分歧点</div><div class="xval">价值组认为回调是加仓窗口（GOOG PE 16.6 已便宜），交易组认为需等 AVGO 右侧确认、不可左侧。</div></div>
+    <div class="xrow"><div class="xkey">冲突点</div><div class="xval">GOOG 估值便宜 vs AI 替代搜索的长期逻辑冲突；NVDA 增长确定性 vs 短期 MA5&lt;MA20 弱势的技术冲突。</div></div>
+    <div class="xrow"><div class="xkey">取舍逻辑</div><div class="xval">采用<strong>“等右侧”</strong>折中：价值依据（NVDA FCF 30%+、JPM PE 15.2）支持加仓方向；技术依据（MA5&lt;MA20、等待 AVGO 事件量价确认）决定时机；若 AVGO beat + gap ≥5% 则 9/3 右侧执行 5–10% SGOV 转换。</div></div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="head"><h2>历史与交易复盘</h2><div class="rule"></div><div class="meta">已经发生的事</div></div>
+  <div class="review"><div class="review-top"><div class="review-title">GOOG · 8/03 全清 + 8/12 回接</div><div class="review-pnl u num">+$63.73 已实现</div></div><div class="review-meta num">3 股 @ $351.28 → $373.19 · 回接 1 股 @ $340.86 · 现浮亏 −$8.83</div><div class="review-body"><strong>原始逻辑：</strong>减持高位科技转防御。<br><strong>结果：</strong>兑现 +$63.73，回接后仍净 +$54.90。<br><strong>教训：</strong>回接量仅 1 股偏少，若 GOOG 企稳 $330 可再加 1 股。</div></div>
+  <div class="review"><div class="review-top"><div class="review-title">BABA · 8/10 全清</div><div class="review-pnl u num">+$43.05</div></div><div class="review-meta num">2 股 @ $109.22 → $131.74 · 19 天</div><div class="review-body"><strong>原始逻辑：</strong>突破 $130 兑现反弹。<br><strong>结果：</strong>胜出。<br><strong>教训：</strong>短期兑现正确，若破 $110 可回接。</div></div>
+  <div class="review"><div class="review-top"><div class="review-title">AMZN · 8/14 + 8/18 止损全清</div><div class="review-pnl d num">−$25.14</div></div><div class="review-meta num">2 股 @ $272.57 → $264.88 / $259.12</div><div class="review-body"><strong>原始逻辑：</strong>跌破止损纪律执行。<br><strong>结果：</strong>严格止损避免更大回撤。<br><strong>教训：</strong>止损纪律有效。</div></div>
+  <div class="review"><div class="review-top"><div class="review-title">TSM · 8/18 买入 → 8/24 止损</div><div class="review-pnl d num">−$26.91</div></div><div class="review-meta num">1 股 @ $431.72 → $406.81 · −6.23%</div><div class="review-body"><strong>原始逻辑：</strong>新机会扫描 AI 链。<br><strong>结果：</strong>跌破 $418 触发止损。<br><strong>教训：</strong>止损纪律正确；现 $414 观察 $395 再入场。</div></div>
+  <div class="review"><div class="review-top"><div class="review-title">VZ · 8/24 部分止盈</div><div class="review-pnl u num">+$19.66</div></div><div class="review-meta num">15 股 → 10 股 @ $50.01 · 剩余 10 股浮盈 +$46.21</div><div class="review-body"><strong>原始逻辑：</strong>浮盈 +8.7% 兑现。<br><strong>结果：</strong>保留底仓享受股息与防御。<br><strong>教训：</strong>分批止盈正确。</div></div>
+</section>
+
+<section class="section">
+  <div class="head"><h2>风险与数据质量</h2><div class="rule"></div></div>
+  <div class="risk"><div class="risk-item"><strong>最大风险：现金 43% 的机会成本</strong> — 通胀与错失 AI 链右侧机会；触发：AVGO beat 后仍不部署。</div><div class="risk-item"><strong>次风险：GOOG AI 替代逻辑</strong> — 搜索护城河被分流；触发：GOOG 跌破 $325 或连续两季增速 &lt;10%。</div><div class="risk-item"><strong>数据限制：</strong>技术指标基于 Alpha Vantage 日 K（截至 2026-09-01）+ 腾讯报价双源核验；盘中波动需以 9/2 开盘后为准。</div></div>
+  <div class="quality" style="margin-top:9px"><strong>数据质量：</strong>腾讯报价 · Alpha Vantage K 线 · Finnhub 财报日历 · 取得 2026-09-02 04:20 UTC / 12:20 CST · 源时间 2026-09-01 16:00 ET · 市场 CLOSED · 新鲜度 CLOSE_SNAPSHOT · 技术指标完整 · 双源核验一致（GOOG 332.03 / NVDA 217.44 / JPM 354.95）</div>
+</section>
+
+<section class="section">
+  <div class="final" data-gate="final-summary">
+    <div class="final-label">FINAL TAKEAWAY · 最后总结</div>
+    <h2>回调不改结构，等待 AVGO 右侧</h2>
+    <p><strong>今天：</strong>持有不动，等今晚 AVGO Q3 验证 AI 需求。<br><strong>本周：</strong>AVGO + 非农决定 SGOV 再部署节奏，右侧 ≥5% gap 才加仓。<br><strong>中期：</strong>Q4 前将 SGOV 降至 30%，核心仓 60–65%。</p>
+    <div class="final-list"><div class="final-item">结论由价值组（估值/护城河/趋势 3.6–4.0/5）与 Trading 组（趋势/动量/情绪 2.8–4.0/10）交叉得出：方向看多、时机等右侧。</div><div class="final-item">若 AVGO miss 或非农走弱、或 GOOG 跌破 $325，则推迟部署并重新评估 AI 链仓位。</div></div>
+  </div>
+</section>
+
+<footer><span class="brand">GUSHEN</span><span class="stamp num">2026-09-02 12:20 CST · 腾讯/Alpha Vantage/Finnhub · 当日有效 · 不构成投资建议</span></footer>
+
+</body>
+</html>

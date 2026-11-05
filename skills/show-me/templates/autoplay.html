@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>自播放讲解页</title>
+<style>
+  :root{
+    --bg:#0b0d10;
+    --fg:#e9ecf3;
+    --dim:#8b93a5;
+    --line:#232833;
+    --panel:#0f1218;
+    --accent:#7c9cff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;overflow:hidden;background:var(--bg);color:var(--fg);
+    font-family:var(--sans);-webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  body::before{
+    content:"";position:fixed;inset:-20% -10% auto -10%;height:75vh;pointer-events:none;
+    background:radial-gradient(58% 58% at 28% 0%,rgba(124,156,255,.16),transparent 72%);
+  }
+
+  /* ── 顶部进度条 ───────────────────────────── */
+  #bar{position:fixed;top:0;left:0;right:0;height:2px;background:rgba(255,255,255,.06);z-index:20}
+  #fill{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:0 50%;
+        background:linear-gradient(90deg,var(--accent),#9db6ff)}
+
+  /* ── 舞台 ─────────────────────────────────── */
+  #stage{
+    position:fixed;inset:0;display:grid;align-content:center;
+    padding:clamp(56px,10vh,120px) clamp(26px,7vw,96px) clamp(96px,16vh,150px);
+    z-index:5;
+  }
+  .scene{margin:0 auto;max-width:900px;width:100%}
+  .scene > *{animation:rise .55s cubic-bezier(.2,.7,.3,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+  .kicker{
+    font:600 12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);margin-bottom:18px;
+  }
+  h1{
+    margin:0 0 22px;font-size:clamp(26px,3.8vw,44px);line-height:1.25;
+    letter-spacing:-.01em;font-weight:650;
+  }
+  .body{font-size:clamp(16px,1.85vw,21px);line-height:1.8;color:#d6dbe6}
+  .body p{margin:0 0 16px}
+  .body p:last-child{margin-bottom:0}
+  .body ul,.body ol{margin:0 0 16px;padding-left:1.35em}
+  .body li{margin:0 0 10px}
+  .body li::marker{color:var(--accent)}
+  .body strong{color:#fff;font-weight:620}
+  .body code{font-family:var(--mono);font-size:.9em;background:rgba(124,156,255,.12);
+             border:1px solid rgba(124,156,255,.18);border-radius:6px;padding:.1em .4em;color:#cdd8ff}
+  pre{
+    margin:0 0 18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px 18px;overflow:auto;font-family:var(--mono);
+    font-size:clamp(12.5px,1.5vw,15px);line-height:1.75;color:#c8d0e0;
+  }
+  pre code{background:none;border:0;padding:0;color:inherit;font-size:inherit}
+  .note{
+    margin:24px 0 0;padding-left:16px;border-left:2px solid var(--accent);
+    font-size:clamp(13.5px,1.5vw,16px);line-height:1.7;color:var(--dim);
+  }
+
+  /* ── HUD ──────────────────────────────────── */
+  .hud{
+    position:fixed;left:0;right:0;bottom:0;z-index:15;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:16px clamp(20px,5vw,40px) calc(16px + env(safe-area-inset-bottom));
+    transition:opacity .4s ease;pointer-events:none;
+  }
+  body.idle .hud{opacity:0}
+  .hud > *{pointer-events:auto}
+  #count{font:500 12.5px/1 var(--mono);color:var(--dim);letter-spacing:.06em}
+  .keys{display:flex;gap:8px}
+  .keys button{
+    appearance:none;cursor:pointer;color:#c4cbda;background:rgba(255,255,255,.045);
+    border:1px solid var(--line);border-radius:10px;min-width:42px;height:38px;
+    padding:0 12px;font-size:14px;line-height:1;font-family:var(--sans);
+    transition:background .18s ease,color .18s ease,border-color .18s ease;
+  }
+  .keys button:hover{background:rgba(124,156,255,.14);color:#fff;border-color:rgba(124,156,255,.4)}
+  .keys button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  body.done #btnPlay{box-shadow:0 0 0 1px rgba(124,156,255,.5)}
+
+  @media (prefers-reduced-motion:reduce){
+    .scene > *{animation:none;opacity:1}
+    .hud{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="bar"><span id="fill"></span></div>
+<main id="stage" aria-live="polite"></main>
+
+<footer class="hud">
+  <span id="count">1 / 1</span>
+  <div class="keys">
+    <button id="btnPrev" title="上一屏（←）">‹</button>
+    <button id="btnPlay" title="播放 / 暂停（空格）">❚❚</button>
+    <button id="btnNext" title="下一屏（→）">›</button>
+    <button id="btnRestart" title="重播（R）">↺</button>
+    <button id="btnFull" title="全屏（F）">⛶</button>
+  </div>
+</footer>
+
+<script>
+/* DECK:START ── 改这一段，引擎一个字不动；整页用 write 工具写出（pi-web 附件靠 write 触发） */
+const DECK = {
+  title: "HTTP 缓存是怎么运转的",
+  pace: 1,                 // 停留时长倍率：0.6 更快，1.4 更慢
+  scenes: [
+    {
+      kicker: "开场",
+      title: "浏览器为什么能秒开同一个页面",
+      body: "<p>第二次打开一个网站，往往第一个字节在几十毫秒内就回来了。这不是网速变快了，是<strong>浏览器根本没发那个请求</strong>。</p>",
+      note: "整个过程发生在你点下回车到页面出现之间，你看不见。"
+    },
+    {
+      kicker: "没有缓存的话",
+      title: "每次都要重新走一遍全程",
+      body: "<ul><li>DNS 解析域名，找服务器地址</li><li>建立 TCP 连接</li><li>发请求，等服务器生成内容</li><li>把几百 KB 的图片和脚本传回来</li></ul><p>走完全程通常是几百毫秒到几秒。</p>"
+    },
+    {
+      kicker: "三道关卡",
+      title: "浏览器依次问三个问题",
+      body: "<ol><li><strong>这东西我存过吗？</strong>没存过 → 老老实实去拿。</li><li><strong>存的那份还能直接用吗？</strong>能 → 直接拿出来，一个字节的网络都不走。</li><li><strong>不能确定了，能帮我确认一下吗？</strong>服务器回一句「没变」，你手里的那份继续用。</li></ol>",
+      note: "第 2 关叫强缓存，第 3 关叫协商缓存。"
+    },
+    {
+      kicker: "关键字段",
+      title: "服务器用两个头决定走哪一关",
+      body: "<pre><code>Cache-Control: max-age=3600\nETag: \"a1b2c3\"</code></pre><p><code>max-age</code> 说「一小时内别来问我」，<code>ETag</code> 是这份内容的指纹，过期后用它来对暗号。</p>"
+    },
+    {
+      kicker: "一次完整走法",
+      title: "过期之后发生的事",
+      body: "<pre><code>GET /logo.png\nIf-None-Match: \"a1b2c3\"\n\n→ 304 Not Modified\n   （正文 0 字节）</code></pre><p>服务器回 <code>304</code> 并且不带正文。浏览器拿回本地存的那份，网络开销只剩几十字节的头部。</p>"
+    },
+    {
+      kicker: "记住这一点",
+      title: "缓存不是加速，是取消",
+      body: "<p>它没有让传输更快 —— 它让传输<strong>不需要发生</strong>。理解了这一点，那些 <code>max-age</code>、<code>ETag</code>、<code>304</code> 就都只是同一件事的不同零件。</p>",
+      note: "线上出事最常见的原因：静态资源给了 max-age 却没加内容指纹，用户一直拿旧文件。"
+    }
+  ]
+};
+/* DECK:END ────────────────────────────────────────────── */
+
+(function(){
+  const stage  = document.getElementById('stage');
+  const fill   = document.getElementById('fill');
+  const count  = document.getElementById('count');
+  const btnPlay= document.getElementById('btnPlay');
+  const scenes = DECK.scenes || [];
+  const pace   = DECK.pace || 1;
+  const clamp  = (v,a,b) => Math.min(b, Math.max(a, v));
+  const esc    = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+  /* 场景 DOM 全程用解析器构建。DECK 允许少量 HTML（段落、列表、代码块），
+     但内容可能来自外部文章，所以先剥掉可执行标签和事件属性，再导入真实文档。 */
+  function buildScene(s){
+    const doc = new DOMParser().parseFromString(
+      '<section class="scene">' +
+        (s.kicker ? '<div class="kicker">' + esc(s.kicker) + '</div>' : '') +
+        (s.title  ? '<h1>' + esc(s.title) + '</h1>' : '') +
+        (s.body   ? '<div class="body">' + String(s.body) + '</div>' : '') +
+        (s.note   ? '<p class="note">' + esc(s.note) + '</p>' : '') +
+      '</section>', 'text/html');
+    const scene = doc.body.firstElementChild;
+    scene.querySelectorAll('script,style,iframe,object,embed,link,meta,form').forEach(n => n.remove());
+    scene.querySelectorAll('*').forEach(n => {
+      Array.from(n.attributes).forEach(a => {
+        const k = a.name.toLowerCase();
+        if (k.startsWith('on') || (k === 'href' && /^\s*javascript:/i.test(a.value))) n.removeAttribute(a.name);
+      });
+    });
+    return document.importNode(scene, true);
+  }
+
+  let idx = 0, playing = true, elapsed = 0, dwell = 1, last = performance.now();
+
+  if (DECK.title) document.title = DECK.title;
+
+  function dwellFor(s){
+    const chars = ((s.title||'') + (s.body||'') + (s.note||'')).replace(/<[^>]*>/g,'').replace(/\s+/g,'').length;
+    return clamp(2000 + chars * 78, 3200, 16000) * pace;
+  }
+
+  function render(){
+    const s = scenes[idx] || {};
+    stage.replaceChildren(buildScene(s));
+    stage.querySelectorAll('.scene > *').forEach((el,i) => {
+      el.style.animationDelay = Math.min(i * 80, 480) + 'ms';
+    });
+    count.textContent = (idx + 1) + ' / ' + scenes.length;
+    document.body.classList.remove('done');
+  }
+
+  function goto(i){
+    idx = clamp(i, 0, scenes.length - 1);
+    dwell = dwellFor(scenes[idx]);
+    elapsed = 0;
+    render();
+  }
+
+  function setPlaying(v){
+    playing = v;
+    btnPlay.textContent = playing ? '❚❚' : '▶';
+  }
+
+  function tick(now){
+    const dt = Math.min(64, now - last);
+    last = now;
+    if (playing && scenes.length){
+      elapsed += dt;
+      if (elapsed >= dwell){
+        if (idx < scenes.length - 1){ goto(idx + 1); }
+        else { elapsed = dwell; setPlaying(false); document.body.classList.add('done'); }
+      }
+    }
+    const frac  = dwell ? clamp(elapsed / dwell, 0, 1) : 0;
+    const total = scenes.length ? (idx + frac) / scenes.length : 0;
+    fill.style.transform = 'scaleX(' + total + ')';
+    requestAnimationFrame(tick);
+  }
+
+  /* 控件 */
+  btnPlay.onclick    = () => { if (document.body.classList.contains('done')) { goto(0); setPlaying(true); } else setPlaying(!playing); };
+  document.getElementById('btnPrev').onclick    = () => goto(idx - 1);
+  document.getElementById('btnNext').onclick    = () => goto(idx + 1);
+  document.getElementById('btnRestart').onclick = () => { goto(0); setPlaying(true); };
+  document.getElementById('btnFull').onclick    = () => {
+    document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  };
+
+  stage.addEventListener('click', () => { if (!document.body.classList.contains('done')) setPlaying(!playing); });
+
+  addEventListener('keydown', e => {
+    const k = e.key;
+    if (k === ' ' || k === 'Enter'){ e.preventDefault(); btnPlay.onclick(); }
+    else if (k === 'ArrowRight' || k === 'ArrowDown'){ e.preventDefault(); goto(idx + 1); }
+    else if (k === 'ArrowLeft'  || k === 'ArrowUp'){ e.preventDefault(); goto(idx - 1); }
+    else if (k === 'r' || k === 'R'){ goto(0); setPlaying(true); }
+    else if (k === 'f' || k === 'F'){ document.getElementById('btnFull').onclick(); }
+    else return;
+  });
+
+  /* 鼠标静止后淡出控件，像视频进度条 */
+  let idle;
+  function poke(){
+    document.body.classList.remove('idle');
+    clearTimeout(idle);
+    idle = setTimeout(() => document.body.classList.add('idle'), 2800);
+  }
+  ['mousemove','keydown','click','touchstart'].forEach(ev => addEventListener(ev, poke, {passive:true}));
+  poke();
+
+  goto(0);
+  setPlaying(true);
+  requestAnimationFrame(t => { last = t; requestAnimationFrame(tick); });
+})();
+</script>
+</body>
+</html>

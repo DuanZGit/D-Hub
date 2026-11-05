@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HTTP 缓存速查</title>
+<style>
+  :root{
+    --bg:#fbfbfd; --fg:#1a1d24; --dim:#5c6472; --line:#e6e8ee;
+    --panel:#fff; --code-bg:#f4f5f9; --accent:#3b5bdb; --mark:rgba(59,91,219,.09);
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b0d10; --fg:#e9ecf3; --dim:#8b93a5; --line:#242a35;
+      --panel:#11141a; --code-bg:#0f1218; --accent:#7c9cff; --mark:rgba(124,156,255,.13);
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;line-height:1.75;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  .layout{
+    display:grid;grid-template-columns:220px minmax(0,1fr);gap:56px;
+    max-width:1160px;margin:0 auto;padding:64px 28px 130px;
+  }
+
+  /* ── 目录 ─────────────────────────────────── */
+  .toc{position:sticky;top:48px;align-self:start;font-size:14px}
+  .toc h2{
+    margin:0 0 14px;font:600 11.5px/1 var(--mono);letter-spacing:.14em;
+    text-transform:uppercase;color:var(--dim);
+  }
+  .toc ol{margin:0;padding:0;list-style:none;border-left:1px solid var(--line)}
+  .toc li{margin:0}
+  .toc a{display:block;padding:6px 0 6px 14px;margin-left:-1px;color:var(--dim);
+         border-left:1px solid transparent;line-height:1.45}
+  .toc a:hover{color:var(--fg);border-left-color:var(--accent);text-decoration:none}
+
+  /* ── 正文 ─────────────────────────────────── */
+  header.hero{margin:0 0 56px}
+  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:16px}
+  h1{margin:0 0 18px;font-size:clamp(28px,4vw,42px);line-height:1.2;letter-spacing:-.015em;font-weight:680}
+  .lede{margin:0;font-size:clamp(16px,1.8vw,19px);color:var(--dim);max-width:62ch}
+
+  section{margin:0 0 54px;scroll-margin-top:36px}
+  h2{font-size:clamp(19px,2.1vw,23px);margin:0 0 18px;letter-spacing:-.01em;font-weight:640}
+  h3{font-size:16px;margin:30px 0 12px;font-weight:620}
+  p{margin:0 0 16px;max-width:70ch}
+  strong{font-weight:640}
+  code{font-family:var(--mono);font-size:.89em;background:var(--mark);border-radius:5px;padding:.12em .4em}
+
+  pre{
+    margin:0 0 18px;background:var(--code-bg);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.7;
+  }
+  pre code{background:none;padding:0;font-size:inherit}
+
+  table{
+    width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14.5px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  }
+  th,td{padding:11px 15px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-weight:600;font-size:12.5px;letter-spacing:.03em;color:var(--dim);
+     text-transform:uppercase;background:var(--mark)}
+  tr:last-child td{border-bottom:0}
+  td code{white-space:nowrap}
+
+  .callout{
+    margin:0 0 20px;padding:14px 18px;border-left:3px solid var(--accent);
+    background:var(--mark);border-radius:0 10px 10px 0;font-size:15px;
+  }
+  .callout p:last-child{margin:0}
+
+  details{
+    border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    margin:0 0 12px;overflow:hidden;
+  }
+  details[open]{background:var(--panel)}
+  summary{
+    cursor:pointer;padding:14px 18px;font-weight:600;font-size:15px;
+    list-style:none;display:flex;align-items:center;gap:10px;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"▸";color:var(--accent);transition:transform .18s ease;display:inline-block}
+  details[open] summary::before{transform:rotate(90deg)}
+  details > .inner{padding:0 18px 18px;border-top:1px solid var(--line);margin-top:0}
+  details > .inner > :first-child{margin-top:16px}
+
+  footer{margin-top:70px;padding-top:24px;border-top:1px solid var(--line);
+         font-size:13px;color:var(--dim)}
+
+  @media (max-width:860px){
+    .layout{grid-template-columns:1fr;gap:32px;padding:40px 20px 100px}
+    .toc{position:static;overflow-x:auto}
+    .toc ol{display:flex;gap:6px;border-left:0;padding-bottom:4px}
+    .toc a{border-left:0;border-bottom:2px solid transparent;padding:6px 10px;white-space:nowrap}
+    .toc a:hover{border-bottom-color:var(--accent)}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="toc" aria-label="目录">
+    <h2>目录</h2>
+    <ol>
+      <li><a href="#idea">一句话</a></li>
+      <li><a href="#headers">两个头字段</a></li>
+      <li><a href="#codes">状态码对照</a></li>
+      <li><a href="#flow">一次完整走法</a></li>
+      <li><a href="#traps">四个常见坑</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">速查 · HTTP</div>
+      <h1>缓存不是加速，是取消</h1>
+      <p class="lede">它没有让传输变快 —— 它让传输不需要发生。搞清楚下面两个字段和一个状态码，
+        网页缓存九成的现象你都能自己推出来。</p>
+    </header>
+
+    <section id="idea">
+      <h2>一句话</h2>
+      <p>浏览器手里有一份本地副本。每次要资源时它先问自己：这份还能直接用吗？
+        能就一个字节的网络都不走；不能确定就去问服务器「变了吗」，服务器说没变，
+        那份副本继续用。</p>
+      <div class="callout">
+        <p><strong>所以缓存省下的是往返和正文，不是带宽峰值。</strong>它取消的是请求本身。</p>
+      </div>
+    </section>
+
+    <section id="headers">
+      <h2>两个头字段</h2>
+      <table>
+        <thead>
+          <tr><th>字段</th><th>谁发的</th><th>它说什么</th><th>过期后</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Cache-Control</code></td><td>服务器</td>
+            <td>「<code>max-age=3600</code>」= 一小时内别来问我</td>
+            <td>浏览器进入协商流程</td>
+          </tr>
+          <tr>
+            <td><code>ETag</code></td><td>服务器</td>
+            <td>「<code>"a1b2c3"</code>」= 这份内容的指纹</td>
+            <td>拿去当暗号对</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><code>max-age</code> 管的是「不用问」，<code>ETag</code> 管的是「问的时候怎么答」。
+        两个一起用才有完整效果。</p>
+    </section>
+
+    <section id="codes">
+      <h2>状态码对照</h2>
+      <table>
+        <thead><tr><th>状态码</th><th>含义</th><th>正文</th><th>你该做什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>200</code></td><td>新内容，拿走吧</td><td>有，完整</td><td>替换本地副本</td></tr>
+          <tr><td><code>304</code></td><td>没变，用你手里那份</td><td>空</td><td>什么事都没有</td></tr>
+          <tr><td><code>404</code></td><td>没有这个资源</td><td>有，错误页</td><td>别缓存错误页</td></tr>
+        </tbody>
+      </table>
+      <p><code>304</code> 是这套机制的省力点：头部几十字节换掉整份正文的传输。</p>
+    </section>
+
+    <section id="flow">
+      <h2>一次完整走法</h2>
+      <pre><code># 第一次
+GET /logo.png
+→ 200 OK
+  Cache-Control: max-age=3600
+  ETag: "a1b2c3"
+
+# 一小时内再访问
+（浏览器直接用本地副本，没有任何网络请求）
+
+# 一小时后
+GET /logo.png
+If-None-Match: "a1b2c3"
+→ 304 Not Modified
+  （正文 0 字节）</code></pre>
+    </section>
+
+    <section id="traps">
+      <h2>四个常见坑</h2>
+
+      <details>
+        <summary>静态资源给了 <code>max-age</code>，却没加内容指纹</summary>
+        <div class="inner">
+          <p>文件名不变、内容变了、缓存又没过期 —— 用户会一直拿旧文件。封面图改动后线上没生效，
+            八成是这个原因。</p>
+          <p>做法：文件名带上内容哈希（<code>app.7f3a91.js</code>），配合长期 <code>max-age</code>。
+            内容一变文件名就变，缓存永远不会撞车。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>用 <code>no-cache</code> 以为是「不缓存」</summary>
+        <div class="inner">
+          <p>它其实是「<strong>可以存，但每次都要问服务器</strong>」。真要不存，写 <code>no-store</code>。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>把 <code>304</code> 当成出错</summary>
+        <div class="inner">
+          <p><code>304</code> 是成功的，只是没有正文。日志里看到大量 <code>304</code> 说明缓存工作正常。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>给接口也配上长缓存</summary>
+        <div class="inner">
+          <p>接口返回的是数据，会变。数据类响应一般用 <code>no-store</code> 或很短的 <code>max-age</code>，
+            只有真正的静态资源才适合长缓存。</p>
+        </div>
+      </details>
+    </section>
+
+    <footer>
+      自包含页面 · 无外部依赖 · 用 <code>write</code> 工具写出（bash 复制不会触发 pi-web 附件卡片）
+    </footer>
+  </main>
+</div>
+</body>
+</html>
