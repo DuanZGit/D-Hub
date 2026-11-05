@@ -256,7 +256,7 @@ export default function dSplit(pi: ExtensionAPI) {
 			wake: Type.Optional(
 				Type.String({
 					description:
-						"拆完要不要自动起跑：'b'（默认，只给 B 发第一句）| 'both' | 'none'",
+						"拆完要不要自动起跑：'both'（默认，两边各发一句开场白）| 'b'（只给 B 发）| 'none'",
 				}),
 			),
 		}),
