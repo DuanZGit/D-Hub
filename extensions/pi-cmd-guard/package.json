@@ -1,10 +1,29 @@
 {
-  "name": "pi-cmd-guard",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@duanz/pi-pi-cmd-guard",
+  "version": "1.0.0",
+  "description": "拦住会毁东西的命令：cat .env、裸 env、systemctl restart pi-web",
   "type": "module",
-  "description": "Block bash commands that would print plaintext secrets, before they run.",
+  "keywords": [
+    "pi-package",
+    "pi-extension"
+  ],
+  "license": "MIT",
+  "author": "DuanZ",
+  "homepage": "https://github.com/DuanZGit/D-Hub/tree/master/extensions/pi-cmd-guard",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DuanZGit/D-Hub.git",
+    "directory": "extensions/pi-cmd-guard"
+  },
+  "files": [
+    "index.ts"
+  ],
   "pi": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

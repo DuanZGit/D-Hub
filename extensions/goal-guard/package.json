@@ -1,0 +1,29 @@
+{
+  "name": "@duanz/pi-goal-guard",
+  "version": "1.0.0",
+  "description": "用 /goal 把本次目标钉进系统提示，防止聊着聊着跑题",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension"
+  ],
+  "license": "MIT",
+  "author": "DuanZ",
+  "homepage": "https://github.com/DuanZGit/D-Hub/tree/master/extensions/goal-guard",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DuanZGit/D-Hub.git",
+    "directory": "extensions/goal-guard"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

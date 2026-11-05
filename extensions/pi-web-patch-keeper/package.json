@@ -1,0 +1,29 @@
+{
+  "name": "@duanz/pi-pi-web-patch-keeper",
+  "version": "1.0.0",
+  "description": "pi-web 升级会覆盖本地补丁，这个扩展在启动时把它们重新打上",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension"
+  ],
+  "license": "MIT",
+  "author": "DuanZ",
+  "homepage": "https://github.com/DuanZGit/D-Hub/tree/master/extensions/pi-web-patch-keeper",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DuanZGit/D-Hub.git",
+    "directory": "extensions/pi-web-patch-keeper"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

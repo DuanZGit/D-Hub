@@ -1,0 +1,41 @@
+{
+  "name": "@duanz/pi-d-split",
+  "version": "1.0.0",
+  "description": "会话聊偏了按切点拆成两个独立会话，原会话不动",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension"
+  ],
+  "license": "MIT",
+  "author": "DuanZ",
+  "homepage": "https://github.com/DuanZGit/D-Hub/tree/master/extensions/d-split",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DuanZGit/D-Hub.git",
+    "directory": "extensions/d-split"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "typebox": {
+      "optional": true
+    }
+  }
+}

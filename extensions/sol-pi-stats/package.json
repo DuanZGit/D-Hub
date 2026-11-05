@@ -1,0 +1,29 @@
+{
+  "name": "@duanz/pi-sol-pi-stats",
+  "version": "1.0.0",
+  "description": "状态栏常驻 token / 上下文用量，另有 /sol 明细",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension"
+  ],
+  "license": "MIT",
+  "author": "DuanZ",
+  "homepage": "https://github.com/DuanZGit/D-Hub/tree/master/extensions/sol-pi-stats",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DuanZGit/D-Hub.git",
+    "directory": "extensions/sol-pi-stats"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

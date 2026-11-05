@@ -91,6 +91,41 @@ function sessionIdOf(sessionFile: string | undefined): string {
   return tail || base;
 }
 
+// 重启前的可见提示：一次性通知 + 页脚倒计时
+function announceRestart(ctx: ExtensionContext | ExtensionCommandContext, delaySeconds: number, extra = "") {
+  const head = `已进入 d-restart 安全重启：预计 ${delaySeconds} 秒后进行重启，重启就绪后自动接续当前会话。`;
+  try {
+    ctx.ui.notify(`${head}${extra ? ` ${extra}` : ""}`, "warning");
+  } catch {}
+
+  let left = Math.max(1, Math.round(delaySeconds));
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const show = () => {
+    try {
+      ctx.ui.setStatus("d-restart", `d-restart 重启中：${left} 秒后重启`);
+    } catch {}
+  };
+  const stop = () => {
+    if (timer) clearInterval(timer);
+    try {
+      ctx.ui.setStatus("d-restart", undefined);
+    } catch {}
+  };
+
+  show();
+  timer = setInterval(() => {
+    left -= 1;
+    if (left <= 0) {
+      stop();
+      return;
+    }
+    show();
+  }, 1000);
+  // 兜底清理，避免服务未重启时状态一直挂着
+  const guard = setTimeout(stop, (delaySeconds + 30) * 1000) as unknown as { unref?: () => void };
+  guard?.unref?.();
+}
+
 function triggerSafeRestart(
   callerSessionId: string,
   delaySeconds = 3,
@@ -123,7 +158,7 @@ export default function safeRestartExtension(pi: ExtensionAPI) {
       const dangerous = /systemctl\s+(--user\s+)?restart\s+pi-web(\.service)?/i;
       if (dangerous.test(cmd)) {
         const sessionId = sessionIdOf(ctx.sessionFile);
-        ctx.ui.notify("检测到粗暴重启命令，已自动重定向为 safe-restart 安全接力，保护其他会话不被中断...", "info");
+        announceRestart(ctx, 3, "（检测到裸 systemctl 命令，已自动改为安全接力）");
         event.input.command = cmd.replace(dangerous, restartCommand(sessionId, 3));
       }
     }
@@ -132,7 +167,7 @@ export default function safeRestartExtension(pi: ExtensionAPI) {
   // 3. 斜杠命令 /safe-restart 与 /restart
   const commandHandler = async (_args: string, ctx: ExtensionCommandContext) => {
     const sessionId = sessionIdOf(ctx.sessionFile);
-    ctx.ui.notify("正在准备安全重启：锁定运行中会话，3 秒后平稳重启并自动接续...", "info");
+    announceRestart(ctx, 3);
     const res = triggerSafeRestart(sessionId, 3);
     if (!res.success) ctx.ui.notify(`触发安全重启失败: ${res.error}`, "error");
   };
@@ -173,6 +208,7 @@ export default function safeRestartExtension(pi: ExtensionAPI) {
       const reason = params.reason || "更新生效";
       const sessionId = sessionIdOf(ctx.sessionFile);
 
+      announceRestart(ctx, delay, `（原因: ${reason}）`);
       const res = triggerSafeRestart(sessionId, delay);
       if (!res.success) {
         return {
@@ -185,7 +221,7 @@ export default function safeRestartExtension(pi: ExtensionAPI) {
         content: [
           {
             type: "text",
-            text: `已安排安全重启（原因: ${reason}）。\n- 缓冲时间: ${delay} 秒\n- 接力策略: 当前所有忙碌中的会话已加入恢复队列，重启完成后自动被唤醒继续执行。`,
+            text: `已进入 d-restart 安全重启（原因: ${reason}），预计 ${delay} 秒后进行重启。\n- 倒计时结束即调用 systemctl 重启 pi-web\n- 接力策略: 当前所有忙碌中的会话已加入恢复队列，重启完成后自动被唤醒继续执行。`,
           },
         ],
         details: { success: true, delay },
