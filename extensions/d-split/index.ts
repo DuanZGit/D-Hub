@@ -309,32 +309,51 @@ export default function dSplit(pi: ExtensionAPI) {
 			const cwd = String(header.cwd ?? ctx.cwd);
 			const taken = new Set(entries.map((e) => String(e.id)));
 
-			// A 段：原样复制，只在末尾补一条会话名。
-			const aEntries = [...partA];
+			// A 段：原样复制，头部挂一条可见标记，末尾补会话名。
 			const titleA = String(params.nameA ?? "").trim();
+			const aNoteId = shortId(taken);
+			taken.add(aNoteId);
+			const aHead = partA[0];
+			const aBody = partA.map((e) =>
+				e === aHead ? { ...e, parentId: aNoteId } : { ...e },
+			);
+			const aNote: Entry = {
+				type: "custom_message",
+				customType: "d-split",
+				content:
+					`新的会话在这里 —— 这是「${titleA || "前半段"}」的前半段` +
+					"（原会话切点之前，内容完整，已完成的事不必重做）。",
+				display: true,
+				id: aNoteId,
+				parentId: null,
+				timestamp: nowIso(),
+			};
+			const aEntries: Entry[] = [aNote, ...aBody];
 			if (titleA) {
 				aEntries.push({
 					type: "session_info",
 					id: shortId(taken),
-					parentId: partA[partA.length - 1]?.id ?? null,
+					parentId: partA[partA.length - 1]?.id ?? aNoteId,
 					timestamp: nowIso(),
 					name: titleA,
 				});
 			}
 			const A = writeSessionFile(dir, cwd, aEntries);
 
-			// B 段：头部挂一条 custom_message，说明「你是拆出来的后半段」。
+			// B 段：头部挂一条可见标记，说明「你是拆出来的后半段」。
+			const titleB = String(params.nameB ?? "").trim();
 			const noteId = shortId(taken);
 			taken.add(noteId);
 			const noteText =
 				String(params.noteB ?? "").trim() ||
-				"以下内容是从另一个会话拆出来的后半段，前半段属于另一个话题、已单独存放。" +
+				`新的会话在这里 —— 这是「${titleB || "后半段"}」的后半段` +
+					"（从另一个会话拆出，前半段属于另一个话题、已单独存放）。" +
 					"这段历史里已经做完的事不要重做，接着最后一条继续。";
 			const note: Entry = {
 				type: "custom_message",
 				customType: "d-split",
 				content: noteText,
-				display: false,
+				display: true,
 				id: noteId,
 				parentId: null,
 				timestamp: nowIso(),
@@ -355,7 +374,6 @@ export default function dSplit(pi: ExtensionAPI) {
 				}
 			}
 			const bEntries = [note, ...bBody];
-			const titleB = String(params.nameB ?? "").trim();
 			if (titleB) {
 				bEntries.push({
 					type: "session_info",
@@ -367,7 +385,7 @@ export default function dSplit(pi: ExtensionAPI) {
 			}
 			const B = writeSessionFile(dir, cwd, bEntries);
 
-			const wakeMode = String(params.wake ?? "b").toLowerCase();
+			const wakeMode = String(params.wake ?? "both").toLowerCase();
 			const started: string[] = [];
 			const failures: string[] = [];
 			if (wakeMode !== "none") {
@@ -380,7 +398,7 @@ export default function dSplit(pi: ExtensionAPI) {
 						targets.push([
 							A.id,
 							`A ${titleA || "前半段"}`,
-							"这条会话是拆分出的前半段副本，内容完整。等用户指令，不要自行改动。",
+							`这是新的「${titleA || "前半段"}」会话，从原会话拆出的前半段，内容完整，不需要重做已完成的工作。`,
 						]);
 					}
 					targets.push([
