@@ -1,0 +1,39 @@
+{
+  "name": "d-restart",
+  "version": "1.0.0",
+  "description": "D-restart: safe restart for pi-web: snapshot every busy session, restart the service, then wake each session back up so no work is lost.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-web",
+    "restart"
+  ],
+  "license": "MIT",
+  "files": [
+    "extensions",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/d-restart.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "typebox": {
+      "optional": true
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "pi-cmd-guard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Block bash commands that would print plaintext secrets, before they run.",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
