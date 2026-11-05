@@ -1,76 +1,158 @@
 # DHub
 
-自制 agent skill、插件与扩展的合集仓库。集中放、集中维护，不再散在各处。
+**个人的 agent 工具箱** — pi 扩展、独立插件与 agent 技能，一个仓库全收。
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-black.svg)](https://nodejs.org)
+[![pi-package](https://img.shields.io/badge/pi-package-black.svg)](https://pi.dev/packages)
+
+不用再从十几个仓库里找某个小工具。这里是我给自己搭的一堆东西：让会话有名字的通知补丁、防止命令炸机器的守卫、把思考过程推到界面上的浮层、一堆按任务自动挑技能的小扩展，以及几十个 SKILL.md。
+
+写这些的出发点很朴素 —— 每天用 agent 干活时遇到的具体麻烦，顺手就修了。
+
+---
 
 ## 目录
 
-| 目录 | 内容 | 本机落地位置 |
+- [里面有什么](#里面有什么)
+- [安装](#安装)
+- [扩展 ext­ensions](#扩展-extensions)
+- [插件 plugins](#插件-plugins)
+- [技能 skills](#技能-skills)
+- [目录结构](#目录结构)
+- [License](#license)
+
+---
+
+## 里面有什么
+
+三类东西，按「怎么用」分开：
+
+| 类型 | 是什么 | 怎么生效 |
 |---|---|---|
-| `extensions/` | pi 扩展（TypeScript） | `~/.pi/agent/extensions/<name>/` |
-| `plugins/` | 独立命令行 / 集成插件 | 见各自 README |
-| `skills/` | 自制 agent skill（`SKILL.md`） | `~/.pi/agent/skills/<name>/` |
+| **扩展** `extensions/` | 跑在 pi 进程里的 TypeScript 扩展，挂钩子、注册工具、加命令 | 装成 pi 包，或放进 `~/.pi/agent/extensions/` |
+| **插件** `plugins/` | 独立的命令行工具 / 服务级集成 | 各自 README |
+| **技能** `skills/` | `SKILL.md` 驱动的行为指南，模型按需加载 | 复制到 `~/.pi/agent/skills/` |
 
-## extensions
-
-| 扩展 | 作用 | 触发点 |
-|---|---|---|
-| [auto-name](extensions/auto-name/) | 会话第一条消息即自动命名，让 PWA 通知能显示「是哪个会话」完成了 | `agent_start` |
-| [pi-web-patch-keeper](extensions/pi-web-patch-keeper/) | pi-web 升级覆盖本地补丁后自动重放，并提示重启生效 | 加载时 / `agent_start` |
-| [d-split](extensions/d-split/) | 按切点把一个会话拆成两个独立会话，原会话不动 | 工具 `d_split` |
-| [d-live](extensions/d-live/) | 把思考与工具调用改写成「内心独白」，经本地 SSE 推到 pi-web 顶部浮层 | `thinking_delta` / `tool_execution_start` |
-| [goal-guard](extensions/goal-guard/) | `/goal <一句话>` 把本会话目标钉进系统提示，防止跑偏 | 命令 `/goal` |
-| [pi-cmd-guard](extensions/pi-cmd-guard/) | 拦截危险命令（`cat .env`、裸 `env`、`systemctl restart pi-web` 等） | `tool_call` |
-| [skill-search](extensions/skill-search/) | 检索本机已装的全部技能，返回最匹配的 `SKILL.md` 路径 | 工具 `skill_search` |
-| [skill-trigger](extensions/skill-trigger/) | 按任务内容自动匹配并触发对应技能 | 会话开始 |
-| [sol-pi-stats](extensions/sol-pi-stats/) | 状态栏统计（token / 上下文用量） | UI 状态栏 |
-
-## plugins
-
-| 插件 | 作用 |
-|---|---|
-| [d-restart](plugins/d-restart/) | pi-web 安全重启：快照忙碌会话，服务就绪后自动续跑 |
-
-## skills
-
-| skill | 作用 |
-|---|---|
-| [ask-me](skills/ask-me/) | 怎么选技能：扫本机技能库，针对当前任务列出该用哪些，给 `SKILL.md` 路径 |
-| [DK](skills/DK/) | 日常生活与家庭知识问答：做菜/营养/家电数码购物决策 |
-| [gushen](skills/gushen/) | 股神：每日挂单 + 投研问答 |
-| [show-me](skills/show-me/) | 解释形态阶梯：文字 → 图 → 交互页 → 自播放讲解页 |
-| [teardown](skills/teardown/) | 把真实机械做成可拆解 3D 交互说明书，并录 60fps 视频 |
-| [coffee-extraction](skills/coffee-extraction/) | 咖啡萃取追踪、设备标定与排障 |
-| [ponytail](skills/ponytail/) | 最懒但能跑通的写码方案；变体 `-audit`/`-debt`/`-gain`/`-help`/`-review` 分别只审不改/清技术债/性能/用法/评审 |
-| [lieflat-less-ai-tone](skills/lieflat-less-ai-tone/) | 去 AI 腔，按规则改写写作痕迹 |
-| [svg-diagram](skills/svg-diagram/) | SVG 图解规范：技术感 + 中文字体友好 |
-| [fireworks-tech-graph](skills/fireworks-tech-graph/) | 科技类图表生成 |
-| [handoff](skills/handoff/) | 把当前会话压成交接文档给别的 agent |
-| [trip-planner](skills/trip-planner/) | 国内多日游行程规划端到端 |
-| [jianhao-travel-planner](skills/jianhao-travel-planner/) | 见好：出行路书工作流（通用版） |
-| [magpie-quota](skills/magpie-quota/) | 查 AI 订阅 / 额度剩余与重置时间 |
-| [magpie-setup](skills/magpie-setup/) | 把 magpie 配成用户想要的样子 |
-| [ui-ux-pro-max](skills/ui-ux-pro-max/) | UI/UX 设计智能：网页 / 移动 / 桌面 |
-| [taste](skills/taste/) | 反流水线前端审美：落地页 / 作品集 / 改版 |
-| [travel-photo-abstraction](skills/travel-photo-abstraction/) | 旅行照片抽象化处理 |
+---
 
 ## 安装
 
-扩展（每个子目录对应 `~/.pi/agent/extensions/<name>/`）：
+**整个包一次装完**（推荐）：
+
+```bash
+pi install git:github.com/DuanZGit/D-Hub
+```
+
+扩展会自动注册，之后 `pi update --extensions` 就能跟上仓库的更新。
+
+**只拿其中一个**：
 
 ```bash
 git clone https://github.com/DuanZGit/D-Hub /tmp/dhub
 cp -r /tmp/dhub/extensions/auto-name ~/.pi/agent/extensions/
 ```
 
-插件见各自目录的 README。
+**技能**手动挑：
 
-## 说明
+```bash
+cp -r /tmp/dhub/skills/ask-me ~/.pi/agent/skills/
+```
 
-- `skills/` 里的参考图、演示视频等大素材（单文件 >1.5MB）未入库，运行时按各 `SKILL.md` 的说明自备；`__pycache__`、生成产物同样剔除。
-- 部分扩展依赖本机路径或约定（如 `pi-web-patch-keeper` 依赖 `~/.pi/agent/.cn-patches/apply.py`），按文件内注释调整。
-- `pi-secret-mask`、`magpie.ts`、`d-reach`、`openviking` 不在此仓库：前两个含本地凭据或为第三方汉化副本，后两个各有独立来源。
-- 旧内容（D-Hub 多 Agent 协调层 v0.4.0）已归档在 tag `archive/d-hub-v0.4.0`，随时可取回。
+> 技能没有写进包的 manifest —— 一次塞 23 个技能进上下文并不划算，用到哪个拿哪个。
+
+---
+
+## 扩展 extensions
+
+每个扩展解决一个具体问题，彼此独立，可以只装需要的。
+
+| 扩展 | 解决什么 | 钩子 |
+|---|---|---|
+| [auto-name](extensions/auto-name/) | 会话第一句话就自动命名。这样完成通知弹出来时，你能看出**是哪个会话**跑完了 | `agent_start` |
+| [pi-web-patch-keeper](extensions/pi-web-patch-keeper/) | pi-web 升级会覆盖我改过的本地补丁，这个扩展在启动时把它们重新打上，并提示重启 | 加载时 |
+| [pi-cmd-guard](extensions/pi-cmd-guard/) | 拦住会毁东西的命令：`cat .env`、裸 `env`、`systemctl restart pi-web` | `tool_call` |
+| [d-split](extensions/d-split/) | 会话聊偏了就按切点拆成两个独立会话，原会话一个字不动 | 工具 `d_split` |
+| [d-live](extensions/d-live/) | 把思考和工具调用实时改写成「内心独白」，经本地 SSE 推到界面顶部浮层 | `thinking_delta` |
+| [goal-guard](extensions/goal-guard/) | `/goal 一句话` 把本次目标钉进系统提示，防止聊着聊着跑题 | 命令 |
+| [skill-search](extensions/skill-search/) | 搜本机全部技能，返回该用哪个 + `SKILL.md` 路径 | 工具 |
+| [skill-trigger](extensions/skill-trigger/) | 按任务内容自动匹配技能，省掉手动挑的一步 | 会话开始 |
+| [sol-pi-stats](extensions/sol-pi-stats/) | 状态栏的 token / 上下文用量 | 状态栏 |
+
+---
+
+## 插件 plugins
+
+### [d-restart](plugins/d-restart/)
+
+pi-web 的安全重启器。普通 `systemctl restart` 会把正在跑的会话全掐断，它做的事是：
+
+1. 逐个快照忙碌会话的现场
+2. 重启服务
+3. 等端口就绪，再把每个会话叫醒接着干
+
+```bash
+d-restart                  # 重启，自动续跑
+d-restart --dry-run        # 只看会动哪些会话
+```
+
+装好以后在 agent 里也有对应工具，不用切终端。
+
+---
+
+## 技能 skills
+
+`SKILL.md` 形式的技能，覆盖几块日常：写作去 AI 腔、图解与图表、旅行行程、咖啡萃取、机械原理可视化，以及一批「怎么组织工作流」的元技能（`ask-me`、`show-me`、`ponytail` 家族）。
+
+| 技能 | 用途 |
+|---|---|
+| [ask-me](skills/ask-me/) | 不确定用哪个技能时，让它按当前任务列清单 |
+| [show-me](skills/show-me/) | 解释的形态阶梯：文字 → 图 → 交互页 → 自播放讲解 |
+| [ponytail](skills/ponytail/) | 最懒但能跑通的方案；附 `-audit`/`-debt`/`-gain`/`-help`/`-review` |
+| [DK](skills/DK/) | 做菜、营养、家电数码的日常决策 |
+| [gushen](skills/gushen/) | 每日挂单 + 投研问答 |
+| [teardown](skills/teardown/) | 把真实机械做成可拆解的 3D 交互说明书 |
+| [coffee-extraction](skills/coffee-extraction/) | 萃取追踪、设备标定与排障 |
+| [lieflat-less-ai-tone](skills/lieflat-less-ai-tone/) | 按规则改写文字里的 AI 痕迹 |
+| [svg-diagram](skills/svg-diagram/) · [fireworks-tech-graph](skills/fireworks-tech-graph/) | 图解与科技图表 |
+| [handoff](skills/handoff/) | 把当前会话压成交接文档给下一个 agent |
+| [trip-planner](skills/trip-planner/) · [jianhao-travel-planner](skills/jianhao-travel-planner/) | 国内多日游行程规划 |
+| [magpie-quota](skills/magpie-quota/) · [magpie-setup](skills/magpie-setup/) | 订阅额度查询与配置 |
+| [ui-ux-pro-max](skills/ui-ux-pro-max/) · [taste](skills/taste/) | 界面设计与审美把关 |
+| [travel-photo-abstraction](skills/travel-photo-abstraction/) | 旅行照片抽象化处理 |
+
+---
+
+## 目录结构
+
+```
+D-Hub/
+├── extensions/          # pi 扩展，一目录一个
+│   ├── auto-name/
+│   ├── pi-cmd-guard/
+│   └── ...
+├── plugins/             # 独立插件
+│   └── d-restart/
+├── skills/              # SKILL.md 技能
+│   ├── ask-me/
+│   └── ...
+├── package.json         # pi 包清单
+└── LICENSE
+```
+
+---
+
+## 更新
+
+```bash
+git pull                                   # 直接用源码的
+pi update --extensions                     # 装成包的
+```
+
+技能和扩展在本机也有一份副本，改完记得同步回仓库 —— 这个仓库是**唯一真源**。
+
+---
 
 ## License
 
-MIT
+[MIT](LICENSE)
