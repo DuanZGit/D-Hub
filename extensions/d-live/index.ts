@@ -271,9 +271,19 @@ const clientSids = new Map<ServerResponse, string>();
 const pings: string[] = [];
 let enabled = true;
 
+const lastSidDebug: Record<string, string> = {};
+
 function sidOf(ctx: any): string {
   try {
-    return ctx?.sessionManager?.getSessionId?.() || "default";
+    const sm = ctx?.sessionManager;
+    const byApi = String(sm?.getSessionId?.() || "");
+    const file = String(sm?.getSessionFile?.() || sm?.getSessionPath?.() || "");
+    const m = file.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/);
+    lastSidDebug.api = byApi;
+    lastSidDebug.file = file;
+    lastSidDebug.picked = m ? m[1] : byApi;
+    if (m) return m[1];
+    return byApi || "default";
   } catch {
     return "default";
   }
@@ -292,11 +302,16 @@ function sess(ctx: any): Sess {
 
 function emit(payload: Record<string, unknown>) {
   const line = `data: ${JSON.stringify(payload)}\n\n`;
+  const sid = typeof payload.sid === "string" ? payload.sid : "";
   for (const c of clients) {
+    // 只推给「正在看这个会话」的页面：多开时会话之间不串
+    const want = clientSids.get(c) || "";
+    if (sid && want && want !== sid) continue;
     try {
       c.write(line);
     } catch {
       clients.delete(c);
+      clientSids.delete(c);
     }
   }
 }
@@ -460,8 +475,10 @@ function startServer() {
     }
     if (url.startsWith("/ping")) {
       const qq = url.includes("?") ? new URLSearchParams(url.slice(url.indexOf("?") + 1)) : null;
-      pings.push(`${new Date().toISOString().slice(11, 19)} ${qq?.get("step") || "?"} sid=${qq?.get("sid") || "-"}`);
-      if (pings.length > 20) pings.shift();
+      pings.push(
+        `${new Date().toISOString().slice(11, 19)} ${qq?.get("step") || "?"} p=${qq?.get("pid") || "?"} sid=${(qq?.get("sid") || "-").slice(0, 8)}`,
+      );
+      if (pings.length > 40) pings.shift();
       res.writeHead(204);
       res.end();
       return;
@@ -479,6 +496,7 @@ function startServer() {
           pending,
           clientSids: [...clientSids.values()],
           pings,
+          sidDebug: lastSidDebug,
           serverSids: [...sessions.keys()],
         }),
       );
