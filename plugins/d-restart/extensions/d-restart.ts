@@ -48,8 +48,8 @@ function resolveScript(): string {
   } catch {}
   // 兜底：包安装目录的常见位置
   const agentDir = path.join(HOME, ".pi/agent");
-  candidates.push(path.join(agentDir, "git/github.com/DuanZGit/d-restart", rel));
-  candidates.push(path.join(agentDir, "npm/node_modules/d-restart", rel));
+  candidates.push(path.join(agentDir, "git/github.com/DuanZGit/D-Hub/plugins/d-restart", rel));
+  candidates.push(path.join(agentDir, "npm/node_modules/dhub/plugins/d-restart", rel));
   // 再兜底：扫 ~/.pi/agent/git/*/*/scripts/d-restart.mjs
   try {
     const ghDir = path.join(agentDir, "git");
@@ -59,11 +59,11 @@ function resolveScript(): string {
       for (const owner of fs.readdirSync(hostDir)) {
         const guess = path.join(hostDir, owner, "d-restart", rel);
         if (fs.existsSync(guess)) candidates.push(guess);
+        const pkgGuess = path.join(hostDir, owner, "plugins/d-restart", rel);
+        if (fs.existsSync(pkgGuess)) candidates.push(pkgGuess);
       }
     }
   } catch {}
-  candidates.push(path.join(agentDir, "bin/d-restart"));
-  candidates.push(path.join(agentDir, "bin/piweb-safe-restart"));
   for (const c of candidates) {
     try {
       if (fs.existsSync(c)) return c;

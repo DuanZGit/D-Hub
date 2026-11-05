@@ -19,8 +19,10 @@
 ## 安装
 
 ```bash
-pi install git:github.com/DuanZGit/d-restart
+pi install git:github.com/DuanZGit/D-Hub
 ```
+
+D-Hub 是一个包，装它会把里面的 10 个扩展一起装上；只想要 d-restart 的话，把 `plugins/d-restart/` 单独拷进 `~/.pi/agent/extensions/` 也能用。
 
 装完 `/reload` 或重启一次 pi-web 生效。
 
@@ -32,7 +34,7 @@ pi install git:github.com/DuanZGit/d-restart
 | --- | --- |
 | 斜杠命令 | `/d-restart`（简写 `/restart`，旧名 `/safe-restart` 仍可用） |
 | Agent 工具 | 模型自己调 `d_restart`（改完插件让它重启时） |
-| 命令行 | `node <包目录>/scripts/d-restart.mjs` |
+| 命令行 | `d-restart`（已装好的 wrapper），或 `node <包目录>/plugins/d-restart/scripts/d-restart.mjs` |
 
 插件还会拦一道：任何 bash 里出现 `systemctl restart pi-web` 的调用，都会被自动改写成安全接力，并弹一条提示。
 
