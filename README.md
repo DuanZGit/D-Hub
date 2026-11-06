@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-black.svg)](https://nodejs.org)
-[![pi-package](https://img.shields.io/badge/pi-package-black.svg)](https://pi.dev/packages)
+[![npm](https://img.shields.io/badge/npm-%40duanz-black.svg)](https://www.npmjs.com/org/duanz)
 
 不用再从十几个仓库里找某个小工具。这里是我给自己搭的一堆东西：让会话有名字的通知补丁、防止命令炸机器的守卫、把思考过程推到界面上的浮层、一堆按任务自动挑技能的小扩展，以及几十个 SKILL.md。
 
@@ -38,28 +38,42 @@
 
 ## 安装
 
-**整个包一次装完**（推荐）：
+每个扩展是一个独立的 npm 包，**用哪个装哪个**，不整包搬。
+
+| 包 | 做什么 |
+|---|---|
+| `@duanz/pi-auto-name` | 会话自动命名 |
+| `@duanz/pi-d-split` | 会话按切点拆分 |
+| `@duanz/pi-d-live` | 思考与工具调用实时推到界面浮层 |
+| `@duanz/pi-pi-cmd-guard` | 拦住危险命令 |
+| `@duanz/pi-pi-web-patch-keeper` | 升级后重打本地补丁 |
+| `@duanz/pi-skill-search` | 检索本机全部技能 |
+| `@duanz/pi-skill-trigger` | 按任务自动匹配技能 |
+| `@duanz/pi-goal-guard` | `/goal` 把目标钉进系统提示 |
+| `@duanz/pi-sol-pi-stats` | 状态栏 token / 上下文用量 |
+| `@duanz/pi-d-restart` | pi-web 安全重启器 |
 
 ```bash
-pi install git:github.com/DuanZGit/D-Hub
+pi install npm:@duanz/pi-d-split
+pi install npm:@duanz/pi-d-restart
 ```
 
-扩展会自动注册，之后 `pi update --extensions` 就能跟上仓库的更新。
+装完重启一次 pi-web 生效。
 
-**只拿其中一个**：
+**想改源码**：
 
 ```bash
-git clone https://github.com/DuanZGit/D-Hub /tmp/dhub
-cp -r /tmp/dhub/extensions/auto-name ~/.pi/agent/extensions/
+git clone https://github.com/DuanZGit/D-Hub ~/projects/D-Hub
 ```
 
-**技能**手动挑：
+**技能**手动挑，复制目录就行：
 
 ```bash
-cp -r /tmp/dhub/skills/ask-me ~/.pi/agent/skills/
+cp -r ~/projects/D-Hub/skills/ask-me ~/.pi/agent/skills/
 ```
 
-> 技能没有写进包的 manifest —— 一次塞 23 个技能进上下文并不划算，用到哪个拿哪个。
+> 不要用 `pi install git:...` 装这个仓库。根 `package.json` 是 private、不含扩展清单，git 方式装不进来 —— 这是故意的，避免一次性塞进十个扩展。
+> 技能也没打进任何包里：一次塞 23 个技能进上下文不划算，用到哪个拿哪个。
 
 ---
 
@@ -136,7 +150,8 @@ D-Hub/
 ├── skills/              # SKILL.md 技能
 │   ├── ask-me/
 │   └── ...
-├── package.json         # pi 包清单
+├── scripts/             # 生成各子包 package.json、批量发布
+├── package.json         # 仓库根（private），不是 pi 包
 └── LICENSE
 ```
 
@@ -145,11 +160,18 @@ D-Hub/
 ## 更新
 
 ```bash
-git pull                                   # 直接用源码的
-pi update --extensions                     # 装成包的
+pi update npm:@duanz/pi-d-split   # 更新单个
+pi update --extensions            # 更新全部
 ```
 
-技能和扩展在本机也有一份副本，改完记得同步回仓库 —— 这个仓库是**唯一真源**。
+改完源码发版：
+
+```bash
+node scripts/gen-packages.mjs     # 同步子包 version
+node scripts/publish-all.mjs      # 发布到 npm（可只发一个：传目录名）
+```
+
+这个仓库是**唯一真源**，npm 上的包都是从这里生成的产物。
 
 ---
 

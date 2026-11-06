@@ -1,11 +1,13 @@
 {
   "name": "dhub",
   "version": "1.0.0",
-  "description": "个人的 agent 工具箱：pi 扩展、插件与技能合集。",
+  "private": true,
+  "description": "个人的 agent 工具箱：pi 扩展、插件与技能合集（源码仓库，分发包见 npm @duanz/*）。",
   "type": "module",
   "keywords": [
-    "pi-package",
-    "pi-extension"
+    "dhub",
+    "pi-extensions",
+    "agent-toolkit"
   ],
   "license": "MIT",
   "author": "DuanZ",
@@ -14,33 +16,7 @@
     "type": "git",
     "url": "git+https://github.com/DuanZGit/D-Hub.git"
   },
-  "pi": {
-    "extensions": [
-      "./extensions/auto-name/index.ts",
-      "./extensions/d-live/index.ts",
-      "./extensions/d-split/index.ts",
-      "./extensions/goal-guard/index.ts",
-      "./extensions/pi-cmd-guard/index.ts",
-      "./extensions/pi-web-patch-keeper/index.ts",
-      "./extensions/skill-search/index.ts",
-      "./extensions/skill-trigger/index.ts",
-      "./extensions/sol-pi-stats/index.ts",
-      "./plugins/d-restart/extensions/d-restart.ts"
-    ]
-  },
   "engines": {
     "node": ">=20"
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*"
-  },
-  "peerDependenciesMeta": {
-    "@earendil-works/pi-coding-agent": {
-      "optional": true
-    },
-    "typebox": {
-      "optional": true
-    }
   }
 }
