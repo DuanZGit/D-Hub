@@ -1,11 +1,12 @@
 {
   "name": "@duanz/pi-skill-trigger",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "按任务内容自动匹配技能，省掉手动挑的一步",
   "type": "module",
   "keywords": [
     "pi-package",
-    "pi-extension"
+    "pi-extension",
+    "pi-web"
   ],
   "license": "MIT",
   "author": "DuanZ",
@@ -16,12 +17,15 @@
     "directory": "extensions/skill-trigger"
   },
   "files": [
-    "index.ts"
+    "index.ts",
+    "README.md",
+    "README.en.md"
   ],
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/DuanZGit/D-Hub/master/docs/covers/skill-trigger.png"
   },
   "engines": {
     "node": ">=20"

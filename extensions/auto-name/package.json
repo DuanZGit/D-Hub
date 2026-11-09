@@ -1,11 +1,12 @@
 {
   "name": "@duanz/pi-auto-name",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "会话消息涨到阈值就自动重新生成标题，完成通知一眼看出是哪个会话",
   "type": "module",
   "keywords": [
     "pi-package",
-    "pi-extension"
+    "pi-extension",
+    "pi-web"
   ],
   "license": "MIT",
   "author": "DuanZ",
@@ -16,12 +17,15 @@
     "directory": "extensions/auto-name"
   },
   "files": [
-    "index.ts"
+    "index.ts",
+    "README.md",
+    "README.en.md"
   ],
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/DuanZGit/D-Hub/master/docs/covers/auto-name.png"
   },
   "engines": {
     "node": ">=20"

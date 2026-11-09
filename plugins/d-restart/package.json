@@ -1,6 +1,6 @@
 {
   "name": "@duanz/pi-d-restart",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "D-restart: safe restart for pi-web: snapshot every busy session, restart the service, then wake each session back up so no work is lost.",
   "type": "module",
   "keywords": [
@@ -14,12 +14,14 @@
     "extensions",
     "scripts",
     "README.md",
+    "README.en.md",
     "LICENSE"
   ],
   "pi": {
     "extensions": [
       "./extensions/d-restart.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/DuanZGit/D-Hub/master/docs/covers/d-restart.png"
   },
   "engines": {
     "node": ">=20"

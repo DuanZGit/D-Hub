@@ -1,9 +1,32 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const REPO = {
   type: "git",
   url: "git+https://github.com/DuanZGit/D-Hub.git",
 };
+const RAW = "https://raw.githubusercontent.com/DuanZGit/D-Hub/master/docs/covers";
+const bump = process.argv.includes("--bump");
+
+/** 读现有 version；--bump 时 patch +1，否则沿用（缺省 1.0.0） */
+function nextVersion(dir) {
+  const path = `${dir}/package.json`;
+  let current = "1.0.0";
+  if (existsSync(path)) {
+    try {
+      current = JSON.parse(readFileSync(path, "utf8")).version ?? current;
+    } catch {
+      // 坏文件就当没写过
+    }
+  }
+  if (!bump) return current;
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(current);
+  if (!m) return current;
+  return `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
+}
+
+function image(slug) {
+  return `${RAW}/${slug}.png`;
+}
 
 // name -> [description, dir, entry, extra]
 const exts = {
@@ -22,16 +45,16 @@ let n = 0;
 for (const [name, [desc, dir, entry, extra]] of Object.entries(exts)) {
   const pkg = {
     name: `@duanz/pi-${name}`,
-    version: "1.0.0",
+    version: nextVersion(dir),
     description: desc,
     type: "module",
-    keywords: ["pi-package", "pi-extension"],
+    keywords: ["pi-package", "pi-extension", "pi-web"],
     license: "MIT",
     author: "DuanZ",
     homepage: `https://github.com/DuanZGit/D-Hub/tree/master/${dir}`,
     repository: { ...REPO, directory: dir },
-    files: ["index.ts"],
-    pi: { extensions: [entry] },
+    files: ["index.ts", "README.md", "README.en.md"],
+    pi: { extensions: [entry], image: image(name) },
     engines: { node: ">=20" },
   };
   if (extra?.typebox) {
@@ -45,16 +68,19 @@ for (const [name, [desc, dir, entry, extra]] of Object.entries(exts)) {
   n++;
 }
 
-// d-restart：保留原有 files/scripts，只改 name 与 repository
+// d-restart：保留原有 files/scripts/peerDependencies，只同步 name / repository / version / pi.image
 const drPath = "plugins/d-restart/package.json";
 const dr = JSON.parse(readFileSync(drPath, "utf8"));
 dr.name = "@duanz/pi-d-restart";
+dr.version = nextVersion("plugins/d-restart");
 dr.author = "DuanZ";
 dr.homepage = "https://github.com/DuanZGit/D-Hub/tree/master/plugins/d-restart";
 dr.repository = { ...REPO, directory: "plugins/d-restart" };
+dr.pi = { ...(dr.pi ?? {}), image: image("d-restart") };
+dr.files = ["extensions", "scripts", "README.md", "README.en.md", "LICENSE"];
 writeFileSync(drPath, JSON.stringify(dr, null, 2) + "\n");
 n++;
 
 // skills 不打包：自建技能只在 GitHub 仓库里做备份，不发 npm
 
-console.log(`wrote ${n} package.json files`);
+console.log(`wrote ${n} package.json files${bump ? " (bumped patch)" : ""}`);

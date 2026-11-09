@@ -1,11 +1,12 @@
 {
   "name": "@duanz/pi-d-live",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "把模型思考与工具调用实时改写成内心独白，推到 pi-web 界面顶部浮层",
   "type": "module",
   "keywords": [
     "pi-package",
-    "pi-extension"
+    "pi-extension",
+    "pi-web"
   ],
   "license": "MIT",
   "author": "DuanZ",
@@ -16,12 +17,15 @@
     "directory": "extensions/d-live"
   },
   "files": [
-    "index.ts"
+    "index.ts",
+    "README.md",
+    "README.en.md"
   ],
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/DuanZGit/D-Hub/master/docs/covers/d-live.png"
   },
   "engines": {
     "node": ">=20"
