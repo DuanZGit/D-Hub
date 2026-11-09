@@ -126,12 +126,15 @@ d-restart --dry-run        # 只看会动哪些会话
 | [DK](skills/DK/) | 做菜、营养、家电数码的日常决策 |
 | [gushen](skills/gushen/) | 每日挂单 + 投研问答 |
 | [teardown](skills/teardown/) | 把真实机械做成可拆解的 3D 交互说明书 |
+| [video-watch](skills/video-watch/) | 把视频压成带时间码的宫格图，真正“看”画面 |
 | [coffee-extraction](skills/coffee-extraction/) | 萃取追踪、设备标定与排障 |
+| [coffee-app-deploy](skills/coffee-app-deploy/) | coffee.duanz.xin 咖啡工坊 PWA 的页面结构与部署 |
 | [lieflat-less-ai-tone](skills/lieflat-less-ai-tone/) | 按规则改写文字里的 AI 痕迹 |
 | [svg-diagram](skills/svg-diagram/) · [fireworks-tech-graph](skills/fireworks-tech-graph/) | 图解与科技图表 |
 | [handoff](skills/handoff/) | 把当前会话压成交接文档给下一个 agent |
 | [trip-planner](skills/trip-planner/) · [jianhao-travel-planner](skills/jianhao-travel-planner/) | 国内多日游行程规划 |
 | [magpie-quota](skills/magpie-quota/) · [magpie-setup](skills/magpie-setup/) | 订阅额度查询与配置 |
+| [agnes-multimodal](skills/agnes-multimodal/) | Agnes 出图 / 出片的调用路由 |
 | [ui-ux-pro-max](skills/ui-ux-pro-max/) · [taste](skills/taste/) | 界面设计与审美把关 |
 | [travel-photo-abstraction](skills/travel-photo-abstraction/) | 旅行照片抽象化处理 |
 
