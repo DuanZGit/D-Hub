@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<!--
+  展示台骨架 · 仪表盘版  showcase-dashboard.html
+  ────────────────────────────────────────────
+  什么时候用：有几个参数可以调，改动之后结果要立刻跟着变 —— 配比、成本、产量、排程、额度、模拟。
+             静态表格给不了「改了会怎样」的时候选它。
+
+  结构：左 = 参数滑杆 + 结果小卡；右 = 环形仪表（可换成任意示意图）。
+
+  改：
+    1. 参数 = .ctl 里的 input[type=range]，改 min/max/step 和 label 即可，滑杆填充会自动跟
+    2. 计算全部放 calc()，返回一个对象；render() 负责把它铺到 DOM 上
+    3. 结果卡 = .res 里的 .k（名字）+ .v（值），要几个复制几个（两列网格自动排）
+    4. 环形仪表：ring 是进度弧（stroke-dashoffset 控制），可以整块换成自己的 SVG
+    5. 「开始冲煮」是可选的定时演示；不需要就删按钮和 start()/reset()
+    6. 改完参数想让某项闪一下，调用 bump(el)
+
+  示例是手冲三段注水，只用来演示结构，换掉它。
+  硬约束：单文件、无 CDN、只用本机 Noto 三款字体、禁 innerHTML、prefers-reduced-motion 已兜底。
+-->
+<!--
+  展示台 · 形态 B：交互仪表盘（调参数，结果实时跟着变）
+  内容：手冲甜甜圈滤杯 · 三段注水方案复算
+  交互：粉量/水温/研磨三个滑杆 → 粉水比、总水量、三段分配、预计时长、滤纸同步重算；「开始冲煮」走一遍计时
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手冲 · 甜甜圈滤杯参数台</title>
+<style>
+:root{
+  --paper:#faf7f2;
+  --card:#fffdf9;
+  --ink:#241c16;
+  --ink-2:#5b4c40;
+  --muted:#9a8b7c;
+  --line:rgba(36,28,22,.10);
+  --copper:#a8622c;
+  --copper-2:#c8814a;
+  --green:#4a6b4f;
+  --serif:"Noto Serif CJK SC","Source Han Serif SC",Georgia,serif;
+  --sans:"Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-serif;
+  --mono:"Noto Sans Mono","SF Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+  background-image:radial-gradient(1200px 600px at 20% -10%,rgba(168,98,44,.07),transparent 65%);
+}
+.wrap{max-width:1060px;margin:0 auto;padding:44px 24px 60px}
+
+header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:32px}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--muted);display:flex;align-items:center;gap:10px}
+.kicker::before{content:"";width:20px;height:1px;background:var(--muted)}
+h1{font-family:var(--serif);font-size:clamp(26px,4.2vw,38px);font-weight:600;letter-spacing:-.01em;margin:12px 0 8px}
+.sub{color:var(--ink-2);font-size:14.5px;max-width:60ch}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:26px;align-items:start}
+
+/* 左：控制 + 读数 */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px}
+.panel h2{font-size:13px;font-weight:600;letter-spacing:.04em;color:var(--muted);margin-bottom:16px;font-family:var(--mono)}
+
+.ctl{margin-bottom:20px}
+.ctl:last-child{margin-bottom:0}
+.ctl-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.ctl-top label{font-size:13.5px;color:var(--ink-2)}
+.ctl-top output{font-family:var(--mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.ctl-top output span{font-size:11px;color:var(--muted);font-weight:400;margin-left:2px}
+
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:2px;
+  background:linear-gradient(90deg,var(--copper) var(--pct,50%),rgba(36,28,22,.12) var(--pct,50%));
+  outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--card);border:2px solid var(--copper);cursor:grab;
+  box-shadow:0 1px 4px rgba(36,28,22,.16);transition:transform .15s;
+}
+input[type=range]::-webkit-slider-thumb:active{transform:scale(1.18);cursor:grabbing}
+input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;border-radius:50%;background:var(--card);
+  border:2px solid var(--copper);cursor:grab;
+}
+
+/* 结果卡 */
+.results{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
+.res{background:rgba(168,98,44,.05);border-radius:9px;padding:11px 13px}
+.res .k{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.05em}
+.res .v{font-family:var(--mono);font-size:20px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:2px;transition:color .3s}
+.res .v small{font-size:11px;color:var(--muted);font-weight:400;margin-left:3px}
+.res.flash .v{color:var(--copper)}
+
+/* 右：圆形仪表 */
+.dial{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 18px;text-align:center;position:sticky;top:20px}
+.dial svg{width:100%;max-width:250px;height:auto;display:block;margin:0 auto}
+.ring-bg{fill:none;stroke:rgba(36,28,22,.08);stroke-width:9}
+.ring-prog{fill:none;stroke:var(--copper);stroke-width:9;stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%;transition:stroke-dashoffset .45s cubic-bezier(.16,1,.3,1)}
+.ring-water{fill:rgba(168,98,44,.10);transition:transform .5s cubic-bezier(.16,1,.3,1);transform-origin:50% 50%}
+.dial .center-num{font-family:var(--mono);font-size:34px;font-weight:600;fill:var(--ink);letter-spacing:-.02em}
+.dial .rib{fill:none;stroke:rgba(36,28,22,.10);stroke-width:1;stroke-dasharray:2 6}
+#hole{transition:fill .3s}
+.brewing #hole{animation:holePulse 1.3s ease-in-out infinite}
+@keyframes holePulse{0%,100%{fill:rgba(36,28,22,.05)}50%{fill:rgba(168,98,44,.30)}}
+.dial .center-lbl{font-family:var(--mono);font-size:10.5px;fill:var(--muted);letter-spacing:.08em}
+.dial .seg{font-family:var(--mono);font-size:9px;fill:var(--muted);letter-spacing:.06em}
+
+.pour{display:flex;gap:6px;margin-top:14px}
+.pour div{
+  flex:1;height:38px;border-radius:6px;background:rgba(168,98,44,.09);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;color:var(--muted);
+  transition:background .3s,color .3s,transform .3s;position:relative;overflow:hidden;
+}
+.pour div::after{
+  content:"";position:absolute;inset:auto 0 0 0;height:0;background:rgba(168,98,44,.24);
+  transition:height .6s cubic-bezier(.16,1,.3,1);
+}
+.pour div.active{background:rgba(168,98,44,.16);color:var(--copper);transform:translateY(-2px)}
+.pour div.done{color:var(--copper)}
+.pour div.done::after{height:100%}
+.pour div.active::after{height:100%;animation:pulse 1.4s ease-in-out infinite}
+.pour div b{position:relative;font-weight:600}
+
+.btn{
+  width:100%;margin-top:16px;padding:12px;font-family:inherit;font-size:14px;font-weight:600;
+  color:#fff;background:var(--copper);border:none;border-radius:9px;cursor:pointer;
+  transition:background .2s,transform .1s;
+}
+.btn:hover{background:#95521f}
+.btn:active{transform:scale(.985)}
+.btn.run{background:var(--green)}
+.btn.run:hover{background:#3c5840}
+
+.hint{margin-top:12px;font-size:11.5px;color:var(--muted);line-height:1.6;text-align:left}
+
+footer{margin-top:28px;font-size:12px;color:var(--muted);line-height:1.75}
+footer b{color:var(--ink-2);font-weight:400}
+
+@keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001s!important;transition-duration:.001s!important}
+}
+@media (max-width:900px){
+  .grid{grid-template-columns:1fr}
+  .dial{position:static;order:-1}
+  .dial svg{max-width:210px}
+}
+@media (max-width:520px){
+  .wrap{padding:28px 16px 44px}
+  .panel{padding:18px 16px}
+  .dial{padding:18px 14px}
+  .results{gap:8px}
+  .res .v{font-size:18px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">参数台 · 手冲</div>
+    <h1>甜甜圈滤杯，16 克该怎么倒</h1>
+    <p class="sub">拖三个滑杆，粉水比、三段水量、时长、滤纸尺寸会跟着重算。按下"开始冲煮"走一遍真实节奏。</p>
+  </header>
+
+  <div class="grid">
+
+    <section class="panel">
+      <h2>参数</h2>
+
+      <div class="ctl">
+        <div class="ctl-top"><label for="dose">粉量</label><output id="doseOut">16<span>g</span></output></div>
+        <input type="range" id="dose" min="10" max="30" step="0.5" value="16">
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-top"><label for="temp">水温</label><output id="tempOut">92<span>℃</span></output></div>
+        <input type="range" id="temp" min="80" max="96" step="1" value="92">
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-top"><label for="grind">研磨档（1 细 → 10 粗）</label><output id="grindOut">6<span>档</span></output></div>
+        <input type="range" id="grind" min="1" max="10" step="1" value="6">
+      </div>
+
+      <div class="results">
+        <div class="res" id="r-ratio"><div class="k">粉水比</div><div class="v">1 : 16</div></div>
+        <div class="res" id="r-water"><div class="k">总水量</div><div class="v">256<small>g</small></div></div>
+        <div class="res" id="r-time"><div class="k">预计时长</div><div class="v">1:45</div></div>
+        <div class="res" id="r-paper"><div class="k">滤纸</div><div class="v">155</div></div>
+      </div>
+    </section>
+
+    <aside class="dial">
+      <svg viewBox="0 0 200 200" role="img" aria-label="冲煮进度圆环">
+        <defs>
+          <clipPath id="bowl"><circle cx="100" cy="100" r="62"/></clipPath>
+        </defs>
+        <circle class="ring-bg" cx="100" cy="100" r="86"/>
+        <circle class="ring-prog" id="ring" cx="100" cy="100" r="86"
+                stroke-dasharray="540.35" stroke-dashoffset="540.35"/>
+        <circle class="ring-bg" cx="100" cy="100" r="62" stroke-width="1" opacity=".55"/>
+        <g clip-path="url(#bowl)">
+          <rect class="ring-water" id="water" x="38" y="162" width="124" height="124" fill="rgba(168,98,44,.14)"/>
+        </g>
+        <circle class="rib" cx="100" cy="100" r="26"/>
+        <circle class="rib" cx="100" cy="100" r="38"/>
+        <circle class="rib" cx="100" cy="100" r="48"/>
+        <circle class="rib" cx="100" cy="100" r="56"/>
+        <circle cx="100" cy="100" r="62" fill="none" stroke="rgba(36,28,22,.16)" stroke-width="1"/>
+        <circle id="hole" cx="100" cy="100" r="14" fill="rgba(36,28,22,.05)" stroke="rgba(36,28,22,.16)" stroke-width="1"/>
+        <text class="center-num" id="dialNum" x="100" y="98" text-anchor="middle">1:45</text>
+        <text class="center-lbl" id="dialLbl" x="100" y="116" text-anchor="middle">预计总时长</text>
+      </svg>
+
+      <div class="pour" id="pour">
+        <div data-seg="0"><b>48</b></div>
+        <div data-seg="1"><b>128</b></div>
+        <div data-seg="2"><b>256</b></div>
+      </div>
+
+      <button class="btn" id="start">开始冲煮</button>
+      <p class="hint" id="hint">三段注水：闷蒸到 48g，第二段到 128g，收尾到 256g。</p>
+    </aside>
+
+  </div>
+
+  <footer>
+    <b>口径：</b>按已记录的甜甜圈滤杯方案复算 —— 16g / 256g（1:16）、92℃、研磨 6 档、155 滤纸、总时长 1:45–2:10；24g 起换 185 滤纸。粉量改变时水量按 1:16 等比缩放、时长随粉量线性估算，仅作排程参考，不是实测结论。注意记录里那条 24g 配方总水量 320g（1:13.3），比这里的等比结果更浓，要照搬请自行下调比例。
+  </footer>
+
+</div>
+
+<script>
+const RATIO = 16;
+const SEG_RATIO = [3/16, 8/16, 1];   // 48/256、128/256、256/256
+
+const doseEl = document.getElementById("dose");
+const tempEl = document.getElementById("temp");
+const grindEl = document.getElementById("grind");
+const doseOut = document.getElementById("doseOut");
+const tempOut = document.getElementById("tempOut");
+const grindOut = document.getElementById("grindOut");
+
+const rRatio = document.querySelector("#r-ratio .v");
+const rWater = document.querySelector("#r-water .v");
+const rTime  = document.querySelector("#r-time .v");
+const rPaper = document.querySelector("#r-paper .v");
+
+const ring = document.getElementById("ring");
+const water = document.getElementById("water");
+const dialNum = document.getElementById("dialNum");
+const dialLbl = document.getElementById("dialLbl");
+const pourEls = [...document.querySelectorAll("#pour div")];
+const hint = document.getElementById("hint");
+const startBtn = document.getElementById("start");
+
+const CIRC = 540.35;
+let state = { dose:16, temp:92, grind:6 };
+let timer = null, running = false;
+
+const fmt = s => Math.floor(s/60) + ":" + String(Math.round(s%60)).padStart(2,"0");
+
+function calc(){
+  const w = state.dose * RATIO;
+  const dur = 105 + (state.dose - 16) * 1.7;
+  const segs = SEG_RATIO.map(r => Math.round(w * r));
+  return { w, dur, segs, paper: state.dose > 18 ? "185" : "155" };
+}
+
+function bump(el){ el.parentElement.classList.add("flash"); setTimeout(()=>el.parentElement.classList.remove("flash"), 420); }
+
+function render(){
+  const c = calc();
+
+  doseOut.innerHTML  = state.dose  + "<span>g</span>";
+  tempOut.innerHTML  = state.temp  + "<span>℃</span>";
+  grindOut.innerHTML = state.grind + "<span>档</span>";
+
+  rRatio.textContent = "1 : " + RATIO;
+  rWater.innerHTML = Math.round(c.w) + "<small>g</small>";
+  rTime.textContent = fmt(c.dur);
+  rPaper.textContent = c.paper;
+
+  pourEls.forEach((el, i) => {
+    el.querySelector("b").textContent = c.segs[i];
+    el.classList.remove("active","done");
+  });
+
+  if (!running) {
+    dialNum.textContent = fmt(c.dur);
+    dialLbl.textContent = "预计总时长";
+    ring.style.strokeDashoffset = CIRC;
+    water.setAttribute("y", 162);
+  }
+
+  const tip = state.dose > 18
+    ? "粉量超过 18g，滤纸换 185，三段按 " + c.segs.join(" / ") + " 注水。记录里 24g 那版用 320g 水（1:13.3），比这里更浓。"
+    : "三段注水：闷蒸到 " + c.segs[0] + "g，第二段到 " + c.segs[1] + "g，收尾到 " + c.segs[2] + "g。";
+  hint.textContent = tip;
+}
+
+function bind(el, key, out){
+  const upd = () => {
+    state[key] = parseFloat(el.value);
+    const pct = (el.value - el.min) / (el.max - el.min) * 100;
+    el.style.setProperty("--pct", pct + "%");
+    if (!running) bump(el);
+    render();
+  };
+  el.addEventListener("input", upd);
+  el.style.setProperty("--pct", ((el.value - el.min)/(el.max - el.min)*100) + "%");
+}
+
+bind(doseEl, "dose", doseOut);
+bind(tempEl, "temp", tempOut);
+bind(grindEl, "grind", grindOut);
+
+/* 冲煮流程 */
+function start(){
+  if (running) { reset(); return; }
+  running = true;
+  startBtn.textContent = "停止";
+  startBtn.classList.add("run");
+  document.querySelector(".dial svg").classList.add("brewing");
+  const c = calc();
+  const total = c.dur * 1000;
+  const t0 = performance.now();
+
+  const step = now => {
+    if (!running) return;
+    const p = Math.min(1, (now - t0) / total);
+    ring.style.strokeDashoffset = CIRC * (1 - p);
+    water.setAttribute("y", 162 - 124 * p);
+    const left = c.dur * (1 - p);
+    dialNum.textContent = fmt(left);
+    dialLbl.textContent = "剩余";
+
+    const segIdx = p < 0.1875 ? 0 : (p < 0.5 ? 1 : 2);
+    pourEls.forEach((el, i) => {
+      el.classList.toggle("active", i === segIdx);
+      el.classList.toggle("done", i < segIdx);
+    });
+
+    if (p < 1) requestAnimationFrame(step);
+    else {
+      pourEls.forEach(el => { el.classList.remove("active"); el.classList.add("done"); });
+      dialNum.textContent = "完成";
+      dialLbl.textContent = Math.round(c.w) + "g · " + fmt(c.dur);
+      setTimeout(reset, 1600);
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+function reset(){
+  running = false;
+  startBtn.textContent = "开始冲煮";
+  startBtn.classList.remove("run");
+  document.querySelector(".dial svg").classList.remove("brewing");
+  render();
+}
+
+startBtn.addEventListener("click", start);
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<!--
+  展示台骨架 · 叙事版  showcase-narrative.html
+  ────────────────────────────────────────────
+  什么时候用：内容有因果或时间顺序 —— 一次故障怎么发生、一个方案怎么被推翻、一个功能怎么上线。
+             「结论不好看，过程才好看」的时候选它。
+
+  结构：一条时间轴 + N 幕。每幕是一个 <section class="scene" data-i="N">，里面随便放什么。
+        示例故意给了四种幕型：读数双卡（.reads）、流程链（.chain）、数据表（table）、结构图（svg.arch）。
+
+  改：
+    1. 复制或删掉一个 <section class="scene"> 就加/减一幕，序号按 DOM 顺序自动算
+    2. .sc-tag 里的 "01 / 症状" 和 "t = 0:00" 是自己写的标签
+    3. 讲解词写进 h2 + .sc-lead，一屏一句话，不要写成段落
+    4. 幕内元素动画：加 style="animation-delay:.35s"；父级 .scene 拿到 .play 类时会整体重放
+       （切幕时代码会先 removeClass 再 reflow 再 addClass，所以每次进入都重新演）
+    5. 自动播放间隔在 JS 的 setInterval(next, 3600) 里
+
+  示例内容是真实的一次网络诊断，只用来演示四幕型，换掉它。
+  硬约束：单文件、无 CDN、只用本机 Noto 三款字体、禁 innerHTML、prefers-reduced-motion 已兜底。
+-->
+<!--
+  展示台 · 形态 A：动效叙事（按时间/因果顺序播放，起因 → 转折 → 结果）
+  内容：UG 为什么 ping 不通 NAS —— 一次真实的网络诊断
+  交互：播放/暂停 · 上一幕/下一幕 · 时间轴点击跳转 · 键盘 ← →
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>诊断 · 为什么 ping 不通</title>
+<style>
+:root{
+  --bg:#0b0e12;
+  --panel:#12171d;
+  --panel-2:#171d25;
+  --line:rgba(255,255,255,.09);
+  --txt:#e8eef5;
+  --txt-2:#9cabbc;
+  --dim:#5d6b7a;
+  --ok:#3ecf8e;
+  --bad:#f2545b;
+  --warn:#f0b429;
+  --blue:#5aa9f0;
+  --mono:"Noto Sans Mono","SF Mono",ui-monospace,monospace;
+  --sans:"Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-serif;
+  --serif:"Noto Serif CJK SC","Source Han Serif SC",Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--txt);font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;line-height:1.55;
+  min-height:100vh;
+  background-image:radial-gradient(900px 500px at 50% -10%,rgba(90,169,240,.10),transparent 70%);
+  background-attachment:fixed;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:44px 24px 56px}
+
+/* 报头 */
+.top{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:34px}
+.kicker{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--dim);
+  text-transform:uppercase;display:flex;gap:12px;align-items:center;
+}
+.kicker::before{content:"";width:22px;height:1px;background:var(--dim)}
+h1{font-family:var(--serif);font-size:clamp(26px,4.4vw,38px);font-weight:600;letter-spacing:-.01em;margin:14px 0 10px}
+h1 em{font-style:normal;color:var(--bad)}
+.sub{color:var(--txt-2);font-size:14.5px;max-width:62ch}
+.sub b{color:var(--txt);font-weight:600}
+
+/* 舞台 */
+.stage{
+  background:linear-gradient(180deg,var(--panel),var(--panel-2));
+  border:1px solid var(--line);border-radius:14px;
+  padding:26px 26px 22px;position:relative;overflow:hidden;
+  min-height:340px;
+}
+.stage::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0 1px,transparent 1px 3px);
+}
+.scene{display:none}
+.scene.on{display:block;animation:sceneIn .5s cubic-bezier(.16,1,.3,1)}
+
+.sc-tag{
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--dim);
+  display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;
+}
+.sc-tag b{color:var(--blue);font-weight:600}
+h2{font-size:clamp(19px,2.6vw,23px);font-weight:600;letter-spacing:-.01em;margin-bottom:6px}
+.sc-lead{color:var(--txt-2);font-size:14px;margin-bottom:22px;max-width:60ch}
+.sc-lead b{color:var(--warn);font-weight:600}
+
+/* 一、症状：两张读数卡 */
+.reads{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.read{
+  background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;
+  padding:16px 18px;
+}
+.read .lbl{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em}
+.read .val{font-family:var(--mono);font-size:32px;font-weight:600;letter-spacing:-.02em;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+.read .val.bad{color:var(--bad)}
+.read .val.ok{color:var(--ok)}
+.read .note{font-size:12.5px;color:var(--txt-2)}
+.packets{display:flex;gap:3px;margin-top:12px;height:22px;align-items:flex-end;overflow:hidden}
+.packets i{
+  flex:1;background:var(--dim);border-radius:1px;height:14px;opacity:.5;
+}
+.packets i.dead{background:var(--bad);animation:drop 1.8s ease-in infinite}
+.packets i.live{background:var(--ok);opacity:.85;animation:arrive 1.6s ease-in-out infinite}
+
+/* 二、猜测：链条 */
+.chain{display:flex;align-items:center;gap:0;flex-wrap:wrap}
+.node{
+  background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;
+  padding:9px 13px;font-size:12.5px;font-family:var(--mono);
+  opacity:0;transform:translateY(8px);
+}
+.scene.play .node{animation:popIn .45s cubic-bezier(.34,1.56,.64,1) forwards}
+.node.hit{border-color:rgba(62,207,142,.5);color:var(--ok)}
+.node.miss{border-color:rgba(242,84,91,.5);color:var(--bad)}
+.link{width:26px;height:1px;background:var(--line);position:relative;opacity:0}
+.scene.play .link{animation:fadeIn .3s ease forwards}
+.verdict{
+  margin-top:18px;padding:12px 16px;border-left:2px solid var(--bad);
+  background:rgba(242,84,91,.07);border-radius:0 8px 8px 0;font-size:13.5px;
+  opacity:0;transform:translateX(-8px);
+}
+.scene.play .verdict{animation:slideIn .5s ease forwards}
+
+/* 三、ARP 表 */
+table.arp{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+table.arp th{
+  text-align:left;color:var(--dim);font-weight:400;font-size:11px;letter-spacing:.08em;
+  padding:0 10px 8px;border-bottom:1px solid var(--line);
+}
+table.arp td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.045)}
+table.arp tr.flash td{animation:flashRow 1.6s ease infinite}
+.zero{color:var(--bad)}
+.fail{color:var(--warn)}
+
+/* 四、macvtap 图 */
+svg.arch{width:100%;height:auto;display:block;margin:6px 0 4px}
+svg.arch text{font-family:var(--mono);font-size:11px;fill:var(--txt-2)}
+svg.arch .box{fill:rgba(255,255,255,.035);stroke:rgba(255,255,255,.14);stroke-width:1;rx:8}
+svg.arch .box-cut{fill:rgba(242,84,91,.07);stroke:rgba(242,84,91,.5);stroke-width:1;rx:8;stroke-dasharray:4 4}
+svg.arch .flow{stroke:var(--ok);stroke-width:1.6;fill:none;stroke-dasharray:5 5;animation:flow 1.1s linear infinite}
+svg.arch .flow-dead{stroke:var(--bad);stroke-width:1.4;fill:none;stroke-dasharray:3 6;opacity:.5}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--txt-2);margin-top:6px}
+.legend i{display:inline-block;width:16px;height:0;border-top:1.6px dashed var(--ok);vertical-align:middle;margin-right:6px}
+.legend i.dead{border-color:var(--bad)}
+
+/* 五、绕行 */
+.route{
+  background:rgba(62,207,142,.05);border:1px solid rgba(62,207,142,.25);border-radius:8px;
+  padding:12px 16px;font-family:var(--mono);font-size:13px;color:var(--ok);margin-bottom:16px;
+}
+.route span{color:var(--dim)}
+.takeaway{
+  margin-top:20px;padding:14px 16px;background:rgba(240,180,41,.07);
+  border:1px solid rgba(240,180,41,.25);border-radius:8px;font-size:13px;color:#f5d288;
+}
+
+/* 控制条 */
+.ctrl{display:flex;align-items:center;gap:14px;margin-top:18px;flex-wrap:wrap}
+.btns{display:flex;gap:8px}
+button{
+  font-family:inherit;font-size:13px;color:var(--txt);cursor:pointer;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:7px;
+  padding:8px 14px;transition:background .2s,border-color .2s,transform .1s;
+}
+button:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2)}
+button:active{transform:scale(.97)}
+button.primary{background:rgba(90,169,240,.16);border-color:rgba(90,169,240,.45);color:#a8d4ff}
+button:disabled{opacity:.35;cursor:default}
+.track{
+  flex:1 1 240px;height:30px;display:flex;gap:4px;align-items:center;min-width:200px;
+}
+.tick{
+  flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);
+  cursor:pointer;transition:background .25s,height .25s;
+}
+.tick.done{background:rgba(90,169,240,.55)}
+.tick.now{background:var(--blue);height:8px}
+.tick:hover{background:rgba(255,255,255,.28)}
+.counter{font-family:var(--mono);font-size:12px;color:var(--dim);white-space:nowrap}
+.counter b{color:var(--txt);font-weight:600}
+
+footer{margin-top:26px;font-size:12px;color:var(--dim);line-height:1.7}
+footer b{color:var(--txt-2);font-weight:400}
+
+/* 动效关键帧 */
+@keyframes sceneIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes popIn{to{opacity:1;transform:none}}
+@keyframes fadeIn{to{opacity:1}}
+@keyframes slideIn{to{opacity:1;transform:none}}
+@keyframes drop{0%{transform:translateY(0);opacity:.9}18%{transform:translateY(0);opacity:.9}100%{transform:translateY(26px);opacity:0}}
+@keyframes arrive{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes flashRow{0%,100%{background:transparent}50%{background:rgba(242,84,91,.10)}}
+@keyframes flow{to{stroke-dashoffset:-20}}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
+  .scene{opacity:1!important}
+}
+@media (max-width:640px){
+  .wrap{padding:28px 16px 40px}
+  .stage{padding:20px 18px 18px;min-height:0}
+  .reads{grid-template-columns:1fr}
+  .read .val{font-size:26px}
+  .chain{gap:6px}
+  .link{width:14px}
+  .counter{display:none}
+  .track{flex-basis:100%;order:3}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="kicker">诊断复盘 · 5 幕</div>
+    <h1>Ping 不通，但 SSH 能登 —— <em>它们坏在同一个地方</em></h1>
+    <p class="sub">一台虚拟机连不上宿主机，但同一台机器的 22 端口能连。<b>这不是防火墙问题</b>，按下"下一幕"看证据怎么一步步把猜测推翻。</p>
+  </header>
+
+  <div class="stage">
+
+    <!-- 1 -->
+    <section class="scene on" data-i="0">
+      <div class="sc-tag"><b>01 / 症状</b><span>t = 0:00</span></div>
+      <h2>两个方向，两种答案</h2>
+      <p class="sc-lead">都是"连宿主机"，一个全丢，一个秒通。先把两个读数摆在一起，<b>矛盾本身就是线索</b>。</p>
+      <div class="reads">
+        <div class="read">
+          <div class="lbl">ICMP · ping 192.168.5.9</div>
+          <div class="val bad" data-count="100" data-suffix="%">0%</div>
+          <div class="note">4 个包全丢，一个都没回来</div>
+          <div class="packets" id="pk1"></div>
+        </div>
+        <div class="read">
+          <div class="lbl">TCP · ssh 192.168.5.9:22</div>
+          <div class="val ok">登录成功</div>
+          <div class="note">同一台机器、同一块网卡、同一个 IP</div>
+          <div class="packets" id="pk2"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="scene" data-i="1">
+      <div class="sc-tag"><b>02 / 第一个猜测</b><span>t = 0:12</span></div>
+      <h2>会不会是防火墙拦了 ICMP？</h2>
+      <p class="sc-lead">最常见的原因。于是把宿主机防火墙链一路查下去。</p>
+      <div class="chain">
+        <div class="node" style="animation-delay:.05s">客户端发包</div>
+        <div class="link" style="animation-delay:.25s"></div>
+        <div class="node hit" style="animation-delay:.35s">NAS INPUT</div>
+        <div class="link" style="animation-delay:.55s"></div>
+        <div class="node hit" style="animation-delay:.65s">默认策略 ACCEPT</div>
+        <div class="link" style="animation-delay:.85s"></div>
+        <div class="node miss" style="animation-delay:.95s">自定义链</div>
+      </div>
+      <div class="verdict">宿主机防火墙全放行，自定义链也改不了 ARP。<b>排除</b> —— 包没被拦，是根本没到。</div>
+    </section>
+
+    <!-- 3 -->
+    <section class="scene" data-i="2">
+      <div class="sc-tag"><b>03 / 反证</b><span>t = 0:26</span></div>
+      <h2>ARP 表里，那个地址是空的</h2>
+      <p class="sc-lead">查 IP 层之前先看第二层。宿主机上 192.168.5.242 的 MAC 是<b>全零</b>，虚拟机这边的邻居表是 <b>FAILED</b>。</p>
+      <table class="arp">
+        <thead><tr><th>设备</th><th>目标 IP</th><th>邻居状态</th><th>MAC</th></tr></thead>
+        <tbody>
+          <tr class="flash"><td>NAS 宿主</td><td>192.168.5.242</td><td class="fail">incomplete</td><td class="zero">00:00:00:00:00:00</td></tr>
+          <tr class="flash"><td>UG 虚机</td><td>192.168.5.9</td><td class="fail">FAILED</td><td class="zero">—</td></tr>
+          <tr><td>UG 虚机</td><td>192.168.5.1</td><td>REACHABLE</td><td>32:02:43:…</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict">同一块网卡，到路由器能 ARP 通，到宿主机不能。<b>问题出在二层</b>，不在 IP、不在防火墙。</div>
+    </section>
+
+    <!-- 4 -->
+    <section class="scene" data-i="3">
+      <div class="sc-tag"><b>04 / 真相</b><span>t = 0:48</span></div>
+      <h2>虚拟机的网卡根本没接在宿主机上</h2>
+      <p class="sc-lead">这台虚机用的是 macvtap 直通：它的帧从虚拟机直接灌进物理网卡，<b>从不经过宿主机的网络栈</b>。所以宿主看不见它。</p>
+      <svg class="arch" viewBox="0 0 640 176" role="img" aria-label="macvtap 直通结构示意图">
+        <rect class="box" x="14" y="58" width="132" height="72"/>
+        <text x="80" y="88" text-anchor="middle">UG 虚机</text>
+        <text x="80" y="106" text-anchor="middle" font-size="10">.242</text>
+
+        <rect class="box" x="252" y="58" width="140" height="72"/>
+        <text x="322" y="88" text-anchor="middle">物理网卡 eth0</text>
+        <text x="322" y="106" text-anchor="middle" font-size="10">macvtap bridge</text>
+
+        <rect class="box-cut" x="252" y="6" width="140" height="44"/>
+        <text x="322" y="26" text-anchor="middle" fill="#f2545b">NAS 宿主网络栈</text>
+        <text x="322" y="40" text-anchor="middle" font-size="9.5" fill="#f2545b">L3 / iptables / 邻居表</text>
+
+        <rect class="box" x="492" y="58" width="132" height="72"/>
+        <text x="558" y="88" text-anchor="middle">路由器</text>
+        <text x="558" y="106" text-anchor="middle" font-size="10">.1</text>
+
+        <path class="flow" d="M146 94 H250"/>
+        <path class="flow" d="M392 94 H490"/>
+        <path class="flow-dead" d="M322 58 V50"/>
+        <text x="332" y="72" font-size="10" fill="#f2545b">帧被截住，不上行</text>
+      </svg>
+      <div class="legend">
+        <span><i></i>正常转发</span>
+        <span><i class="dead"></i>设计上就不通的那一段</span>
+      </div>
+      <div class="verdict">不是配置错、不是规则写错。<b>macvtap 的结构决定了宿主和这台虚机不能直接对话。</b></div>
+    </section>
+
+    <!-- 5 -->
+    <section class="scene" data-i="4">
+      <div class="sc-tag"><b>05 / 绕行</b><span>t = 1:20</span></div>
+      <h2>既然直连不行，就绕一层</h2>
+      <p class="sc-lead">把去宿主机的流量先丢给路由器，让路由器转回来。多一跳，但这一跳绕开了那段设计上不通的路。</p>
+      <div class="route">192.168.5.9 <span>via</span> 192.168.5.1 <span>dev</span> ens3</div>
+      <div class="chain">
+        <div class="node hit" style="animation-delay:.05s">UG 虚机</div>
+        <div class="link" style="animation-delay:.25s"></div>
+        <div class="node hit" style="animation-delay:.35s">路由器 .1</div>
+        <div class="link" style="animation-delay:.55s"></div>
+        <div class="node hit" style="animation-delay:.65s">NAS .9</div>
+      </div>
+      <div class="takeaway">代价：多一跳、多几毫秒；依赖广播的服务发现仍然失效。写进了 netplan 持久化，重启也在。</div>
+    </section>
+
+  </div>
+
+  <div class="ctrl">
+    <div class="btns">
+      <button id="prev">← 上一幕</button>
+      <button id="play" class="primary">播放</button>
+      <button id="next">下一幕 →</button>
+    </div>
+    <div class="track" id="track"></div>
+    <div class="counter"><b id="cur">1</b> / 5</div>
+  </div>
+
+  <footer>
+    <b>数据来源：</b>2026-10-20 实机核查 · arping 0 应答、ping 100% 丢包、TCP 22 可登入；路由 <b>192.168.5.9 via 192.168.5.1 dev ens3</b> 已持久化于 /etc/netplan/50-cloud-init.yaml。
+  </footer>
+
+</div>
+
+<script>
+const scenes = [...document.querySelectorAll(".scene")];
+const track  = document.getElementById("track");
+const curEl  = document.getElementById("cur");
+const btnPlay= document.getElementById("play");
+let idx = 0, playing = false, timer = null;
+
+/* 时间轴刻度 */
+scenes.forEach((_, i) => {
+  const t = document.createElement("div");
+  t.className = "tick" + (i === 0 ? " now" : "");
+  t.addEventListener("click", () => { stop(); go(i); });
+  track.appendChild(t);
+});
+const ticks = [...track.children];
+
+/* 包序列 */
+const pk1 = document.getElementById("pk1");
+const pk2 = document.getElementById("pk2");
+for (let i = 0; i < 12; i++) {
+  const a = document.createElement("i");
+  a.className = "dead";
+  a.style.animationDelay = (i * 40) + "ms";
+  pk1.appendChild(a);
+  const b = document.createElement("i");
+  b.className = "live";
+  b.style.opacity = ".85";
+  pk2.appendChild(b);
+}
+
+function replay(el){
+  el.classList.remove("play");
+  void el.offsetWidth;
+  el.classList.add("play");
+  el.querySelectorAll("[data-count]").forEach(n => {
+    const target = parseFloat(n.dataset.count);
+    const suffix = n.dataset.suffix || "";
+    const t0 = performance.now();
+    const step = now => {
+      const p = Math.min(1, (now - t0) / 900);
+      n.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))) + suffix;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+function go(i){
+  idx = Math.max(0, Math.min(scenes.length - 1, i));
+  scenes.forEach((s, k) => s.classList.toggle("on", k === idx));
+  ticks.forEach((t, k) => {
+    t.classList.toggle("now", k === idx);
+    t.classList.toggle("done", k < idx);
+  });
+  curEl.textContent = idx + 1;
+  replay(scenes[idx]);
+}
+
+function next(){ if (idx < scenes.length - 1) go(idx + 1); else stop(); }
+function stop(){ playing = false; btnPlay.textContent = "播放"; clearInterval(timer); }
+
+btnPlay.addEventListener("click", () => {
+  if (playing) { stop(); return; }
+  playing = true; btnPlay.textContent = "暂停";
+  if (idx === scenes.length - 1) go(0);
+  timer = setInterval(next, 3600);
+});
+document.getElementById("next").addEventListener("click", () => { stop(); next(); });
+document.getElementById("prev").addEventListener("click", () => { stop(); go(idx - 1); });
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") { stop(); next(); }
+  if (e.key === "ArrowLeft")  { stop(); go(idx - 1); }
+});
+
+go(0);
+</script>
+</body>
+</html>

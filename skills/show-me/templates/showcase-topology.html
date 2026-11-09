@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<!--
+  展示台骨架 · 拓扑版  showcase-topology.html
+  ────────────────────────────────────────────
+  什么时候用：内容是「谁连着谁」，且每个节点的细节多到塞不进图里 ——
+             架构、调用链、依赖关系、责任边界、家庭网络。
+
+  结构：左 SVG 节点图 + 右详情面板；数据在 DATA（节点内容）和 EDGES（节点 → 连线）里。
+
+  改：
+    1. DATA 每个键 = { t 主名, k 类型, kv:[[键,值]…], p 一句话职责, w 踩过的坑(可 null) }
+    2. EDGES 把节点 id 映射到它所属的连线 id 数组，点节点时这些线会高亮
+    3. 加节点：<g class="n" data-id="xxx" tabindex="0"> 里放 rect + <text class="t1"> 主名 + <text class="t2"> 副行
+    4. 加连线：<path class="e" id="eN" d="..."/>；物理上通、逻辑上不通的那段加 class="dead" 变红色虚线
+    5. 「演示一个请求」走 PATH 数组，改顺序就行；XS/YS 是每一站数据包的坐标
+    6. 移动端靠横向滚动（svg min-width:620px），不要把字缩小
+
+  示例是家里那台服务器的入口链，只用来演示结构，换掉它。
+  硬约束：单文件、无 CDN、只用本机 Noto 三款字体、禁 innerHTML、prefers-reduced-motion 已兜底。
+-->
+<!--
+  展示台 · 形态 C：拓扑全景（关系图为中心，点节点看细节）
+  内容：家里那台服务器的入口链 —— 从公网到 pi-web 走了几跳
+  交互：点节点 → 右侧详情；点链路注意项；「演示一个请求」让数据包沿路径走一遍
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拓扑 · 一个请求要走几跳</title>
+<style>
+:root{
+  --bg:#080d12;
+  --panel:#0e151d;
+  --panel-2:#121a24;
+  --line:rgba(120,200,220,.14);
+  --txt:#dfeaf3;
+  --txt-2:#8ba0b4;
+  --dim:#4d6072;
+  --cyan:#38e0c8;
+  --blue:#5aa9f0;
+  --amber:#f0b429;
+  --bad:#f2545b;
+  --mono:"Noto Sans Mono","SF Mono",ui-monospace,monospace;
+  --sans:"Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-serif;
+  --serif:"Noto Serif CJK SC","Source Han Serif SC",Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--txt);font-family:var(--sans);line-height:1.6;
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+  background-image:
+    linear-gradient(rgba(120,200,220,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(120,200,220,.045) 1px,transparent 1px),
+    radial-gradient(900px 500px at 30% -10%,rgba(56,224,200,.07),transparent 70%);
+  background-size:36px 36px,36px 36px,100% 100%;
+}
+.wrap{max-width:1140px;margin:0 auto;padding:42px 24px 56px}
+
+header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:28px}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--dim);display:flex;align-items:center;gap:10px}
+.kicker::before{content:"";width:20px;height:1px;background:var(--dim)}
+h1{font-family:var(--serif);font-size:clamp(25px,4vw,36px);font-weight:600;letter-spacing:-.01em;margin:12px 0 8px;text-wrap:balance}
+h1 em{font-style:normal;color:var(--cyan)}
+.sub{color:var(--txt-2);font-size:14px;max-width:66ch}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+
+.stage{
+  background:linear-gradient(180deg,var(--panel),var(--panel-2));
+  border:1px solid var(--line);border-radius:14px;padding:14px;
+  position:relative;
+}
+svg.map{width:100%;height:auto;display:block}
+
+/* 节点 */
+.n{cursor:pointer}
+.n rect{
+  fill:rgba(255,255,255,.035);stroke:rgba(140,200,220,.22);stroke-width:1;
+  transition:fill .25s,stroke .25s,filter .25s;
+}
+.n:hover rect{fill:rgba(56,224,200,.10);stroke:rgba(56,224,200,.55)}
+.n.sel rect{fill:rgba(56,224,200,.14);stroke:var(--cyan);stroke-width:1.6;filter:drop-shadow(0 0 10px rgba(56,224,200,.35))}
+.n.dim{opacity:.32}
+.n text{pointer-events:none}
+.n .t1{font-family:var(--sans);font-size:12.5px;fill:var(--txt);font-weight:500}
+.n .t2{font-family:var(--mono);font-size:10px;fill:var(--txt-2)}
+.n .dot{fill:var(--cyan);opacity:.85}
+
+/* 连线 */
+.e{stroke:rgba(140,200,220,.26);stroke-width:1.4;fill:none;transition:stroke .25s,stroke-width .25s}
+.e.hi{stroke:var(--cyan);stroke-width:2}
+.e.dead{stroke:var(--bad);stroke-width:1.4;stroke-dasharray:4 5;opacity:.55}
+.e.hi-dead{stroke:var(--bad);stroke-width:2;stroke-dasharray:4 5;opacity:.9}
+.pkt{fill:var(--cyan);opacity:0}
+.pkt.on{animation:travel 1.6s linear forwards}
+.e2label{font-family:var(--mono);font-size:9px;fill:var(--dim);letter-spacing:.04em}
+
+@keyframes travel{0%{opacity:0}8%{opacity:1}92%{opacity:1}100%{opacity:0}}
+
+/* 右侧详情 */
+.side{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;position:sticky;top:20px;min-height:380px}
+.side .ph{color:var(--dim);font-size:13px;text-align:center;padding:70px 10px;line-height:1.8}
+.side .ph b{display:block;font-size:15px;color:var(--txt-2);margin-bottom:6px}
+.side h3{font-size:16px;font-weight:600;margin-bottom:2px;letter-spacing:-.01em}
+.side .kind{font-family:var(--mono);font-size:10.5px;color:var(--cyan);letter-spacing:.08em;margin-bottom:12px}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.kv .k{color:var(--dim);white-space:nowrap}
+.kv .v{font-family:var(--mono);color:var(--txt);text-align:right;word-break:break-all}
+.side p{font-size:12.5px;color:var(--txt-2);margin-top:12px;line-height:1.7}
+.side .warn{
+  margin-top:12px;padding:10px 12px;border-left:2px solid var(--amber);
+  background:rgba(240,180,41,.07);border-radius:0 7px 7px 0;font-size:12px;color:#f3d18b;
+}
+
+.ctrl{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center}
+button{
+  font-family:inherit;font-size:12.5px;color:var(--txt);cursor:pointer;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:7px;
+  padding:8px 14px;transition:background .2s,border-color .2s,transform .1s;
+}
+button:hover{background:rgba(56,224,200,.12);border-color:rgba(56,224,200,.4)}
+button:active{transform:scale(.97)}
+button.primary{background:rgba(56,224,200,.14);border-color:rgba(56,224,200,.45);color:#9df0e2}
+.steps{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-left:auto;min-height:16px}
+.steps b{color:var(--cyan);font-weight:600}
+
+footer{margin-top:24px;font-size:12px;color:var(--dim);line-height:1.75}
+footer b{color:var(--txt-2);font-weight:400}
+
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001s!important;transition-duration:.001s!important}}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .side{position:static;min-height:0;order:2}
+  .side .ph{padding:26px 10px}
+}
+.pan-hint{display:none;font-family:var(--mono);font-size:10.5px;color:var(--dim);margin:6px 2px -6px;letter-spacing:.06em}
+@media (max-width:560px){
+  .wrap{padding:26px 14px 40px}
+  .stage{padding:8px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  svg.map{min-width:620px}
+  .pan-hint{display:block}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">拓扑 · 入口链</div>
+    <h1>从公网到页面，一个请求要过 <em>5 站</em></h1>
+    <p class="sub">点任意一个方块看它负责什么、卡在哪。虚线那段是"物理上通、逻辑上不通"的地方。</p>
+  </header>
+
+  <div class="layout">
+
+    <div class="pan-hint">← 左右滑动看全图 →</div>
+    <div class="stage">
+      <svg class="map" viewBox="0 0 700 486" role="img" aria-label="家庭服务器入口链路拓扑图">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="rgba(140,200,220,.5)"/>
+          </marker>
+        </defs>
+
+        <!-- 链路 -->
+        <path class="e" id="e1" d="M120 62 V104" marker-end="url(#ar)"/>
+        <path class="e" id="e2" d="M120 168 V210" marker-end="url(#ar)"/>
+        <path class="e" id="e3" d="M120 274 V316" marker-end="url(#ar)"/>
+        <path class="e" id="e4" d="M200 344 H340" marker-end="url(#ar)"/>
+        <path class="e" id="e5" d="M200 344 H268 V420 H340" marker-end="url(#ar)"/>
+        <path class="e dead" id="e6" d="M615 376 V408"/>
+        <path class="e" id="e7" d="M615 168 V300"/>
+
+        <text class="e2label" x="128" y="88">公网 → :1218</text>
+        <text class="e2label" x="128" y="194">:12180</text>
+        <text class="e2label" x="128" y="300">:30143</text>
+        <text class="e2label" x="238" y="336">:30142</text>
+        <text class="e2label" x="238" y="412">:30152</text>
+        <text class="e2label" x="624" y="232">网关</text>
+        <text class="e2label" x="604" y="398" fill="#f2545b" text-anchor="end">macvtap · 二层不通</text>
+
+        <!-- 节点 -->
+        <g class="n" data-id="pub" tabindex="0">
+          <rect x="40" y="14" width="160" height="48" rx="8"/>
+          <circle class="dot" cx="54" cy="38" r="3.5"/>
+          <text class="t1" x="68" y="36">公网入口</text>
+          <text class="t2" x="68" y="50">122.233.105.88</text>
+        </g>
+
+        <g class="n" data-id="hap" tabindex="0">
+          <rect x="40" y="104" width="160" height="64" rx="8"/>
+          <circle class="dot" cx="54" cy="128" r="3.5"/>
+          <text class="t1" x="68" y="126">haproxy</text>
+          <text class="t2" x="68" y="140">:1218 · 按域名分流</text>
+          <text class="t2" x="68" y="154">多站共用入口</text>
+        </g>
+
+        <g class="n" data-id="caddy" tabindex="0">
+          <rect x="40" y="210" width="160" height="64" rx="8"/>
+          <circle class="dot" cx="54" cy="234" r="3.5"/>
+          <text class="t1" x="68" y="232">系统 Caddy</text>
+          <text class="t2" x="68" y="246">:12180 · 证书</text>
+          <text class="t2" x="68" y="260">handle 互斥组</text>
+        </g>
+
+        <g class="n" data-id="gate" tabindex="0">
+          <rect x="40" y="316" width="160" height="56" rx="8"/>
+          <circle class="dot" cx="54" cy="338" r="3.5"/>
+          <text class="t1" x="68" y="336">auth-gate</text>
+          <text class="t2" x="68" y="350">:30143 · 登录态校验</text>
+        </g>
+
+        <g class="n" data-id="pi" tabindex="0">
+          <rect x="340" y="316" width="150" height="56" rx="8"/>
+          <circle class="dot" cx="354" cy="338" r="3.5"/>
+          <text class="t1" x="368" y="336">pi-web（duanz）</text>
+          <text class="t2" x="368" y="350">:30142</text>
+        </g>
+
+        <g class="n" data-id="xxt" tabindex="0">
+          <rect x="340" y="392" width="150" height="56" rx="8"/>
+          <circle class="dot" cx="354" cy="414" r="3.5"/>
+          <text class="t1" x="368" y="412">pi-web（xxt）</text>
+          <text class="t2" x="368" y="426">:30152</text>
+        </g>
+
+        <g class="n" data-id="router" tabindex="0">
+          <rect x="550" y="104" width="130" height="64" rx="8"/>
+          <circle class="dot" cx="564" cy="128" r="3.5"/>
+          <text class="t1" x="578" y="126">iStoreOS</text>
+          <text class="t2" x="578" y="140">.1 · 默认网关</text>
+          <text class="t2" x="578" y="154">分流 / 代理</text>
+        </g>
+
+        <g class="n" data-id="nas" tabindex="0">
+          <rect x="550" y="300" width="130" height="76" rx="8"/>
+          <circle class="dot" cx="564" cy="324" r="3.5"/>
+          <text class="t1" x="578" y="322">NAS 宿主</text>
+          <text class="t2" x="578" y="336">.9 · 16G 内存</text>
+          <text class="t2" x="578" y="350">卷1 89% · 卷3 NVMe</text>
+        </g>
+
+        <g class="n" data-id="ug" tabindex="0">
+          <rect x="550" y="408" width="130" height="52" rx="8"/>
+          <circle class="dot" cx="564" cy="430" r="3.5"/>
+          <text class="t1" x="578" y="428">UG 虚机</text>
+          <text class="t2" x="578" y="442">.242 · macvtap</text>
+        </g>
+
+        <!-- 数据包 -->
+        <circle class="pkt" id="pkt" r="4"/>
+      </svg>
+    </div>
+
+    <aside class="side" id="side">
+      <div class="ph"><b>点一个方块</b>看它负责什么、<br>以及踩过的那个坑。</div>
+    </aside>
+
+  </div>
+
+  <div class="ctrl">
+    <button class="primary" id="run">演示一个请求</button>
+    <button id="reset">全部展开</button>
+    <div class="steps" id="steps"></div>
+  </div>
+
+  <footer>
+    <b>口径：</b>192.168.5.242（UG 虚机）→ 192.168.5.1（iStoreOS）→ 192.168.5.9（NAS 宿主）；UG 与 NAS 因 macvtap 桥接在二层不通，只能经路由器绕行（<b>192.168.5.9/32 via 192.168.5.1</b>）。入口链 1218 → 12180 → 30143 → 30142，端口见各节点。
+  </footer>
+
+</div>
+
+<script>
+const DATA = {
+  pub:  { t:"公网入口", k:"WAN", kv:[["地址","122.233.105.88"],["暴露端口","1218"]],
+          p:"所有外部流量从这里进来，先落在 haproxy 上。", w:null },
+  hap:  { t:"haproxy", k:"L7 反向代理", kv:[["监听",":1218"],["职责","按域名分发"]],
+          p:"同一台机器上跑着多个站，靠它按 Host 头分流到不同后端。", w:"改这里要重载配置，配置写错会整站 502。" },
+  caddy:{ t:"系统 Caddy", k:"TLS 终结", kv:[["监听",":12180"],["配置文件","/etc/caddy/Caddyfile"]],
+          p:"负责证书和 HTTPS，然后把请求转给 auth-gate。", w:"Caddy 的 handle 是互斥组，会盖掉站点顶层的 respond —— 顺序写反了整段规则静默失效。" },
+  gate: { t:"auth-gate", k:"鉴权", kv:[["监听",":30143"],["放行后","转 :30142 / :30152"]],
+          p:"检查登录态，通过之后才把请求交给 pi-web。", w:null },
+  pi:   { t:"pi-web（duanz）", k:"应用", kv:[["监听",":30142"],["重启","d_restart / d-restart"]],
+          p:"就是当前这个实例。改插件、更新 npm 包后要重启才生效。", w:"直接 systemctl restart 会掐断正在跑的会话，必须走 d_restart 快照续跑。" },
+  xxt:  { t:"pi-web（xxt）", k:"应用", kv:[["监听",":30152"],["与 duanz","同机不同实例"]],
+          p:"另一个人的实例，同一条入口链，独立的会话和数据。", w:null },
+  nas:  { t:"NAS 宿主", k:"物理机", kv:[["地址","192.168.5.9"],["内存","15.7G / 用 12.6G"],["存","卷1 89% · 卷3 NVMe"]],
+          p:"UG 虚机就跑在它上面（libvirt/KVM）。", w:"容量红线：卷1 89%、根盘 85%，清理要在红线前做。" },
+  router:{ t:"iStoreOS", k:"路由 / 网关", kv:[["地址","192.168.5.1"],["职责","默认网关 · 分流"]],
+          p:"整张网的中枢。UG 到 NAS 的唯一通路也要经过它。", w:null },
+  ug:   { t:"UG 虚机", k:"虚拟化客户机", kv:[["地址","192.168.5.242"],["网卡","macvtap 桥接"],["绕行","192.168.5.9/32 via .1"]],
+          p:"当前这台机器。网卡用 macvtap 直通物理网卡，所以它和宿主 NAS 在二层是断的。", w:"ping NAS 100% 丢包但 SSH 能连 —— 不是防火墙，是 macvtap 的结构限制。" }
+};
+
+const EDGES = {
+  pub:["e1"], hap:["e1","e2"], caddy:["e2","e3"], gate:["e3","e4","e5"],
+  pi:["e4"], xxt:["e5"], nas:["e6","e7"], router:["e7"], ug:["e6"]
+};
+
+const PATH = [
+  ["pub","e1"],["hap","e2"],["caddy","e3"],["gate","e4"],["pi",null]
+];
+
+const side = document.getElementById("side");
+const svg  = document.querySelector("svg.map");
+const nodes = [...svg.querySelectorAll(".n")];
+const edges = [...svg.querySelectorAll(".e")];
+const stepsEl = document.getElementById("steps");
+
+function clearAll(){
+  nodes.forEach(n => n.classList.remove("sel","dim"));
+  edges.forEach(e => e.classList.remove("hi","hi-dead"));
+}
+
+function select(id){
+  clearAll();
+  const d = DATA[id];
+  if (!d) return;
+
+  nodes.forEach(n => { if (n.dataset.id !== id) n.classList.add("dim"); else n.classList.add("sel"); });
+  (EDGES[id] || []).forEach(eid => {
+    const el = document.getElementById(eid);
+    if (!el) return;
+    el.classList.add(el.classList.contains("dead") ? "hi-dead" : "hi");
+  });
+
+  side.textContent = "";
+  const h3 = document.createElement("h3"); h3.textContent = d.t;
+  const kind = document.createElement("div"); kind.className = "kind"; kind.textContent = d.k;
+  side.append(h3, kind);
+  d.kv.forEach(([k, v]) => {
+    const row = document.createElement("div"); row.className = "kv";
+    const kk = document.createElement("span"); kk.className = "k"; kk.textContent = k;
+    const vv = document.createElement("span"); vv.className = "v"; vv.textContent = v;
+    row.append(kk, vv); side.appendChild(row);
+  });
+  const p = document.createElement("p"); p.textContent = d.p; side.appendChild(p);
+  if (d.w) {
+    const warn = document.createElement("div"); warn.className = "warn"; warn.textContent = d.w;
+    side.appendChild(warn);
+  }
+}
+
+nodes.forEach(n => {
+  n.addEventListener("click", () => select(n.dataset.id));
+  n.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(n.dataset.id); } });
+});
+
+/* 演示一个请求：沿主链走一遍 */
+const pkt = document.getElementById("pkt");
+const YS = [38, 136, 242, 344, 344];
+const XS = [120, 120, 120, 120, 415];
+
+function run(){
+  clearAll();
+  stepsEl.textContent = "";
+  let i = 0;
+  const tick = () => {
+    if (i >= PATH.length) {
+      stepsEl.innerHTML = "<b>到达</b> pi-web :30142";
+      return;
+    }
+    const [id, eid] = PATH[i];
+    if (eid) {
+      const el = document.getElementById(eid);
+      el.classList.add("hi");
+    }
+    pkt.classList.remove("on");
+    pkt.setAttribute("cx", XS[i]);
+    pkt.setAttribute("cy", YS[i]);
+    void pkt.getBBox();
+    pkt.classList.add("on");
+
+    const d = DATA[id];
+    stepsEl.innerHTML = "<b>" + (i + 1) + "/5</b> " + d.t;
+    select(id);
+    i++;
+    setTimeout(tick, 900);
+  };
+  tick();
+}
+
+document.getElementById("run").addEventListener("click", run);
+document.getElementById("reset").addEventListener("click", () => { clearAll(); stepsEl.textContent = ""; });
+</script>
+</body>
+</html>
