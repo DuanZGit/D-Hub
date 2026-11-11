@@ -16,21 +16,82 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createServer, type ServerResponse } from "node:http";
+import { openSync, readSync, closeSync, statSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
 const PORT = 18999;
-const MIN_SEG = 70; // 至少这么多字才允许按句号切（实测每段改写 ~2s，太短会把队列打满）
-const MAX_SEG = 300; // 硬上限，超过无条件切
-const MAX_LINES = 6;
+const MIN_SEG = 200; // 至少这么多字才允许按句号切（每段改写 ~2s，切太碎会刷屏）
+const MAX_SEG = 500; // 硬上限，超过无条件切
+const MAX_LINES = 3;
 const MAX_PENDING = 4; // 队列上限，超了就丢新段，保证实时性
-const REWRITE_TIMEOUT = 12000; // 单次改写硬超时
+const REWRITE_TIMEOUT = 25000; // 单次改写硬超时（段变长后模型更慢）
 
-const SYS = `把下面这段思考，改写成给用户看的进度播报：这个项目正在做什么改造、推进到哪一步、下一步往哪走。
+// ── 判档回显：tail magpie routing jsonl，把 rule.pick（判档结果）推给对应会话的浮层条 ──
+const ROUTING_DIR = "/home/duanz/.config/magpie/routing";
+const ROUTING_TAIL_MS = 2000; // 轮询间隔
+const ROUTING_MAX_BYTES = 256 * 1024; // 每次最多读文件尾这么多，routing 行单条几十 KB 也够
+
+function todayRoutingFile(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return join(ROUTING_DIR, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.jsonl`);
+}
+
+function startEffortWatcher(emitFn: (p: Record<string, unknown>) => void) {
+  let offset = 0; // 上次读到的字节位置
+  let lastSize = -1;
+  const timer = setInterval(() => {
+    try {
+      const file = todayRoutingFile();
+      if (!existsSync(file)) return;
+      const size = statSync(file).size;
+      if (size === lastSize) return;
+      // 文件被截断/轮转就从头部重读
+      const start = size < offset ? 0 : offset;
+      const len = Math.min(size - start, ROUTING_MAX_BYTES);
+      if (len <= 0) { offset = size; lastSize = size; return; }
+      const buf = Buffer.alloc(len);
+      const fd = openSync(file, "r");
+      try {
+        readSync(fd, buf, 0, len, start);
+      } finally {
+        closeSync(fd);
+      }
+      offset = start + len;
+      lastSize = size;
+      for (const line of buf.toString("utf8").split("\n")) {
+        if (!line.includes('"pick"')) continue;
+        try {
+          const rec = JSON.parse(line);
+          const rule = rec.rule || {};
+          const pick = rule.pick;
+          if (!pick || typeof pick !== "string") continue;
+          const sid = String(rec.session || "");
+          if (!sid) continue;
+          emitFn({
+            kind: "effort",
+            sid,
+            pick,
+            sent: rec.effort || "",
+            degraded: Boolean(rule.classified && rule.classified.degraded) || /DEGRADED/.test(line),
+          });
+        } catch {}
+      }
+    } catch {}
+  }, ROUTING_TAIL_MS);
+  if (typeof timer.unref === "function") timer.unref();
+}
+
+const SYS = `把下面这段思考，改写成给用户看的进度解说：正在做什么、为什么要这么做、做完会怎样。
 
 规则：
-- 不用第一人称，不出现"我"；用无主语或"正在/已经/接下来"开头；
-- 每句要有信息量：说清在改什么、进展到哪、下一步是什么，让人看懂这件事往哪推进；
-- 每句 14 字以内，最多 ${MAX_LINES} 句；每句结尾加省略号；
-- 一半左右的句子带 emoji，别堆满；
+- 说人话，像朋友在旁边随口讲一句，带点画面感，可以用「先翻翻」「挨个对一遍」「这就去」「稳了」这类口语；
+- 不用第一人称，不出现"我"；用无主语或"正在/已经/接下来/这就"开头；
+- 每句 16~24 字，把前因后果说完整：先说要做什么或看到什么，再说为什么这么选；
+- 最多 ${MAX_LINES} 句，每句一行；每句开头放 1 个贴切的 emoji，句尾必须有标点（…… / 。 / ！）；
+- 一轮里只围绕一个目标往前推，几句连起来要像同一条线：第二句起用「接着」「于是」「这下」「所以」「接下来」「顺手」这类词承接上一句，别忽然跳到无关的事，也别重复前面说过的内容；
+- 输入里若给了「前面已经说过」，就从那儿接着往下说，把新的发现和下一步接上，不要另起炉灶；
+- emoji 别重复；句子要生动，避免「正在处理」「进行分析」这类空话；
 - 不写文件名、函数名、端口、路径、命令、缩写字母（JS/CSS/SSE/API 这类），一律换成日常说法；
 - 不加引号和编号，不模仿用户语气；
 - 必须真的改写：禁止照抄原文里的任何句子、列表、表格、日志；原文里的工具输出直接跳过不写；
@@ -162,7 +223,10 @@ export function bashIntent(cmd: unknown): string {
   const c = String(cmd || "").trim();
   if (!c) return "跑一条命令";
   const args = c.split(/[\s|;&<>()]+/).filter(Boolean);
-  const rest = args.filter((w) => !/^[-+]/.test(w));
+  // 丢掉重定向目标：>/dev/null 会被当成文件名，播出去就成了「看 null 里的内容」
+  const DEVNULL = /^(?:\/dev\/(?:null|stdout|stderr|zero|fd\/\d+)|\/proc\/self\/fd\/\d+)$/i;
+  const JUNKNAME = /^(?:null|undefined|nil|true|false|nan|\d+)$/i;
+  const rest = args.filter((w) => !/^[-+]/.test(w) && !DEVNULL.test(w));
 
   // 搜内容：在 X 里找 Y
   if (/\b(grep|rg|ag|ack)\b/.test(c)) {
@@ -190,8 +254,12 @@ export function bashIntent(cmd: unknown): string {
   if (script && /\b(python3?|node|bash|sh|deno)\b/.test(c)) return `跑 ${baseName(script)} 脚本`;
   // 看文件内容：说清哪个文件
   if (/\b(sed\s+-n|head|tail|less|more|cat)\b/.test(c)) {
-    const f = rest.filter((w) => w.includes("/") || /\.[a-z]{2,4}$/i.test(w)).pop();
-    return f ? `看 ${baseName(f)} 里的内容` : "看文件内容";
+    const f = rest
+      .filter((w) => !/^\/dev\//.test(w))
+      .filter((w) => w.includes("/") || /\.[a-z]{2,4}$/i.test(w))
+      .pop();
+    const n = f ? baseName(f) : "";
+    return n && !JUNKNAME.test(n) ? `看 ${n} 里的内容` : "看文件内容";
   }
   // 日志：说清哪个服务
   if (/\bjournalctl\b/.test(c)) {
@@ -214,8 +282,8 @@ export function bashIntent(cmd: unknown): string {
 }
 
 const CMD_SYS = `你看到的是 AI 助手刚刚执行的一条命令，以及它执行前在想什么。
-用一句中文说出这条命令的**意图**：它想达成什么、想确认什么、想找出什么。说意图，不说手段。
-规则：16 字以内；不要出现命令名、文件名、路径、参数、端口、缩写字母；不要引号和编号。
+用一句中文说出这条命令的**意图**：它想达成什么、想确认什么、想找出什么。说意图，不说手段，说得口语、有画面感。
+规则：16 字以内；句首放 1 个贴切的 emoji，句尾加标点（…… 或 。）；不要出现命令名、文件名、路径、参数、端口、缩写字母；不要引号和编号。
 只输出这一句话。`;
 
 /** 让模型说清这条命令到底想干嘛；超时或失败返回空串，由 bashIntent 规则兜底。 */
@@ -256,22 +324,107 @@ async function cmdIntent(ctx: any, cmd: string, hint = ""): Promise<string> {
   }
 }
 
+const SUMMARY_SYS = `用一句中文向用户交代：这一轮到底干了什么、成没成。
+规则：30 字以内；说结果，不说过程；口语一点，别用「已完成」「进行处理」这类空话；不出现文件名、路径、命令、缩写字母；不加引号编号；句首 1 个 emoji，句尾加标点。
+只输出这一句话。`;
+
+/** 一轮跑完给一句结论。模型超时或说得不像就用规则句兜底，永远不空着。 */
+async function roundSummary(
+  ctx: any,
+  info: { ms: number; steps: number; fails: number; names: string[] },
+): Promise<string> {
+  const sec = info.ms > 0 ? Math.round(info.ms / 1000) : 0;
+  const fallback = `🎯 这一轮想完了，${sec}s、${info.steps} 步${info.fails ? `，有 ${info.fails} 处没成` : "，都顺"}。`;
+  const model = pickModel(ctx);
+  if (!model || info.steps === 0) return fallback;
+  const kinds = [...new Set(info.names)].slice(0, 6).join("、");
+  try {
+    const res: any = await Promise.race([
+      ctx.modelRegistry.complete(
+        model,
+        {
+          systemPrompt: SUMMARY_SYS,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `这一轮做了 ${info.steps} 步（${kinds}），其中失败 ${info.fails} 次，共 ${sec} 秒。`,
+                },
+              ],
+              timestamp: Date.now(),
+            },
+          ],
+        },
+        { cacheRetention: "none" },
+      ),
+      new Promise((r) => setTimeout(() => r(null), 15000)),
+    ]);
+    const out = (res?.content || [])
+      .filter((c: any) => c.type === "text")
+      .map((c: any) => c.text)
+      .join("")
+      .trim();
+    const one =
+      out
+        .split("\n")
+        .map((x: string) =>
+          x
+            .replace(/^[-•*\d.、)\s]+/, "")
+            .replace(/^["「『]|["」』]$/g, "")
+            .trim(),
+        )
+        .filter(Boolean)[0] || "";
+    if (!one || one.length > 40) return fallback;
+    return one;
+  } catch {
+    return fallback;
+  }
+}
+
 type Sess = {
   seg: string;
   ctx: any;
   chain: Promise<void>;
   pending: number;
+  /** 本轮开始时间，用来算总耗时 */
+  t0: number;
+  /** 本轮工具步数与失败数 */
+  tools: number;
+  fails: number;
+  names: string[];
+  /** 本轮已经播过的短句，喂给下一次改写，让前后能接上 */
+  history: string[];
 };
 
-const sessions = new Map<string, Sess>();
-const clients = new Set<ServerResponse>();
+// pi-web 会为每个会话各加载一份扩展。模块级变量在不同实例之间不共享，
+// 只有抢到端口的那个实例能收到浏览器连接 —— 用 globalThis 把状态提到进程级，
+// 否则表现为“只有第一个开着的会话有条子”。
+const SHARED: any =
+  (globalThis as any).__dliveShared ||
+  ((globalThis as any).__dliveShared = {
+    sessions: new Map<string, Sess>(),
+    clients: new Set<ServerResponse>(),
+    clientSids: new Map<ServerResponse, string>(),
+    pings: [] as string[],
+    recent: [] as string[],
+    listening: false,
+  });
+
+const sessions: Map<string, Sess> = SHARED.sessions;
+const clients: Set<ServerResponse> = SHARED.clients;
 /** 每个 SSE 连接上报的会话 id，仅用于诊断串会话问题 */
-const clientSids = new Map<ServerResponse, string>();
+const clientSids: Map<ServerResponse, string> = SHARED.clientSids;
 /** 前端启动阶段上报，用来判断脚本跑到哪一步 */
-const pings: string[] = [];
+const pings: string[] = SHARED.pings;
+const recent: string[] = SHARED.recent;
 let enabled = true;
 
 const lastSidDebug: Record<string, string> = {};
+
+// 工具事件的 ctx 不一定带 sessionManager，记住最近一次真实会话，别让推送退化成 default 被过滤掉
+let lastRealSid = "";
 
 function sidOf(ctx: any): string {
   try {
@@ -282,18 +435,36 @@ function sidOf(ctx: any): string {
     lastSidDebug.api = byApi;
     lastSidDebug.file = file;
     lastSidDebug.picked = m ? m[1] : byApi;
-    if (m) return m[1];
-    return byApi || "default";
-  } catch {
-    return "default";
+    const real = m ? m[1] : byApi;
+    if (real) {
+      lastRealSid = real;
+      return real;
+    }
+  } catch {}
+  return lastRealSid || "default";
+}
+
+const INSTANCE = Math.random().toString(36).slice(2, 8);
+
+/**
+ * 同一会话只让一份扩展实例处理事件。
+ * pi-web 会为同一个会话加载多份扩展，不去重的话模型改写、工具意图都会重复跑两遍。
+ */
+function claim(sid: string): boolean {
+  if (!SHARED.owner) SHARED.owner = new Map<string, string>();
+  const cur = SHARED.owner.get(sid);
+  if (!cur) {
+    SHARED.owner.set(sid, INSTANCE);
+    return true;
   }
+  return cur === INSTANCE;
 }
 
 function sess(ctx: any): Sess {
   const sid = sidOf(ctx);
   let s = sessions.get(sid);
   if (!s) {
-    s = { seg: "", ctx, chain: Promise.resolve(), pending: 0 };
+    s = { seg: "", ctx, chain: Promise.resolve(), pending: 0, t0: 0, tools: 0, fails: 0, names: [], history: [] };
     sessions.set(sid, s);
   }
   s.ctx = ctx;
@@ -301,12 +472,27 @@ function sess(ctx: any): Sess {
 }
 
 function emit(payload: Record<string, unknown>) {
+  try {
+    // pi-web 同一个会话可能加载两份扩展（重启接力时），两份 handler 都连着共享的 clients，
+    // 不去重的话每条推送会发两次。
+    const key = `${String(payload.sid || "")}|${String(payload.kind)}|${String(payload.tid || "")}|${String(payload.text || "")}`;
+    const now = Date.now();
+    const last = SHARED.lastEmit;
+    if (last && last.k === key && now - last.t < 150) return;
+    SHARED.lastEmit = { k: key, t: now };
+    const t = new Date().toTimeString().slice(0, 8);
+    recent.push(`${t} ${String(payload.kind)} sid=${String(payload.sid || "-").slice(0, 8)}`);
+    if (recent.length > 40) recent.splice(0, recent.length - 40);
+  } catch {}
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   const sid = typeof payload.sid === "string" ? payload.sid : "";
+  const unknown = !sid || sid === "default";
   for (const c of clients) {
-    // 只推给「正在看这个会话」的页面：多开时会话之间不串
+    // 只推给「报了号且号对得上」的页面：空号连接（旧版页面）一律不推，
+    // 否则一个页面会收到所有会话的播报，串到别的会话里。
     const want = clientSids.get(c) || "";
-    if (sid && want && want !== sid) continue;
+    if (!want) continue;
+    if (!unknown && want !== sid) continue;
     try {
       c.write(line);
     } catch {
@@ -346,10 +532,18 @@ function shouldCut(s: string): boolean {
   return false;
 }
 
+// 系统注入的上下文（压缩块、记忆注入）长得像“思考”，但不是，不能播给用户
+const NOISE =
+  /(CONTEXT BREAKDOWN|COMPRESSED BLOCKS|openviking-context|OpenViking context|\[ACP\]|Compressed m\d|<acp\b|viking:\/\/|User said \(m\d)/i;
+function isNoise(text: string): boolean {
+  return NOISE.test(text);
+}
+
 function flushSeg(s: Sess, sid: string) {
   const text = s.seg.trim();
   s.seg = "";
   if (text.length < 8) return;
+  if (isNoise(text)) return; // 系统注入的上下文不是思考，直接丢
   rewrite(s, sid, text);
 }
 
@@ -389,6 +583,10 @@ function rewrite(s: Sess, sid: string, text: string) {
       const ctx = s.ctx;
       const model = pickModel(ctx);
       if (!model) return;
+      const prior = s.history.slice(-4);
+      const lead = prior.length
+        ? "前面已经说过（接着往下讲，别重复）：\n" + prior.join("\n") + "\n\n这一段新的思考：\n"
+        : "";
       try {
         const res: any = await Promise.race([
           ctx.modelRegistry.complete(
@@ -398,7 +596,7 @@ function rewrite(s: Sess, sid: string, text: string) {
               messages: [
                 {
                   role: "user",
-                  content: [{ type: "text", text }],
+                  content: [{ type: "text", text: lead + text }],
                   timestamp: Date.now(),
                 },
               ],
@@ -425,14 +623,18 @@ function rewrite(s: Sess, sid: string, text: string) {
           // 过滤照抄的噪声：带代码/表格符号、英文术语、长数字的行一律不要
           .filter(
             (line: string) =>
-              line.length > 0 &&
-              line.length <= 18 &&
+              line.length >= 8 &&
+              line.length <= 40 &&
+              !isNoise(line) &&
               !/[|[\]{}%#=<>_\\]/.test(line) &&
               !/\b(?:acp|api|json|sse|css|html|ctx|sid|pid|url|http|localhost|status|result|delta|token)\b/i.test(line) &&
               !/\d{3,}/.test(line),
           )
           .slice(0, MAX_LINES);
-        if (lines.length) emit({ kind: "lines", sid, lines });
+        if (lines.length) {
+          emit({ kind: "lines", sid, lines });
+          s.history = s.history.concat(lines).slice(-8);
+        }
       } catch (e: any) {
         const name = String(e?.name || "");
         if (name !== "AbortError") {
@@ -498,6 +700,7 @@ function startServer() {
           pings,
           sidDebug: lastSidDebug,
           serverSids: [...sessions.keys()],
+          recent,
         }),
       );
       return;
@@ -505,31 +708,48 @@ function startServer() {
     res.writeHead(404);
     res.end();
   });
-  server.on("error", () => {
-    /* 端口被占就静默放弃，不影响 agent */
+  // pi-web 每个会话都会加载一份扩展；端口只能被第一份占到。
+  // 重复绑定是正常的，不能让它打断这个会话里后面的 pi.on(...) 注册。
+  server.on("error", (e: any) => {
+    if (e?.code === "EADDRINUSE") return;
   });
-  server.listen(PORT, "127.0.0.1");
-  const timer = setInterval(() => {
-    for (const c of clients) {
-      try {
-        c.write(": ping\n\n");
-      } catch {
-        clients.delete(c);
-      }
+  if (!SHARED.listening) {
+    SHARED.listening = true;
+    try {
+      server.listen(PORT, "127.0.0.1");
+    } catch {
+      SHARED.listening = false;
     }
-  }, 20000);
-  if (typeof timer.unref === "function") timer.unref();
+  }
+  // 心跳只挂一份：每个会话都会加载一份扩展，无条件起定时器会变成 N 份重复推送
+  if (!SHARED.beat) {
+    const timer = setInterval(() => {
+      for (const c of clients) {
+        try {
+          // 不只是保活：前端把这条当心跳，收不到就自己重连
+          c.write('data: {"kind":"beat"}\n\n');
+        } catch {
+          clients.delete(c);
+          clientSids.delete(c);
+        }
+      }
+    }, 15000);
+    if (typeof timer.unref === "function") timer.unref();
+    SHARED.beat = timer;
+  }
 }
 
 export default function piWebLive(pi: ExtensionAPI) {
   startServer();
+  startEffortWatcher(emit);
 
   pi.on("message_update", async (event: any, ctx: any) => {
     if (!enabled) return;
     const ev = event?.assistantMessageEvent;
     if (!ev) return;
-    const s = sess(ctx);
     const sid = sidOf(ctx);
+    if (!claim(sid)) return;
+    const s = sess(ctx);
     if (ev.type === "thinking_delta" && typeof ev.delta === "string") {
       s.seg += ev.delta;
       if (shouldCut(s.seg)) flushSeg(s, sid);
@@ -546,34 +766,92 @@ export default function piWebLive(pi: ExtensionAPI) {
   pi.on("tool_execution_start", async (event: any, ctx: any) => {
     if (!enabled) return;
     const sid = sidOf(ctx);
+    if (!claim(sid)) return;
     const name = event?.toolName || "";
+    const tid = String(event?.toolCallId || "");
+    const s = sess(ctx);
+    s.tools++;
+    if (name) s.names.push(name);
     if (name === "bash") {
       // 先用规则版即时占位（零延迟），模型算出真正的意图后再把那一行改写掉
       const cmd = event?.args?.command;
-      const tid = event?.toolCallId || `t${Date.now()}`;
+      const key = tid || `t${Date.now()}`;
       const placeholder = bashIntent(cmd);
-      emit({ kind: "tool", sid, tid, text: placeholder });
-      const leak = sessions.get(sid)?.seg || "";
+      emit({ kind: "tool", sid, tid: key, text: placeholder });
+      const leak = s.seg || "";
       cmdIntent(ctx, cmd, leak)
         .then((said) => {
-          if (said && said !== placeholder) emit({ kind: "tool-intent", sid, tid, text: said });
+          if (said && said !== placeholder) emit({ kind: "tool-intent", sid, tid: key, text: said });
         })
         .catch(() => {});
       return;
     }
-    emit({ kind: "tool", sid, text: describeTool(name, event?.args) });
+    emit({ kind: "tool", sid, tid: tid || null, text: describeTool(name, event?.args) });
+  });
+
+  // 工具跑完了：告诉前端这一行的成败与耗时（成败和耗时都由 pi 自己测，不用前端算）
+  pi.on("tool_execution_end", async (event: any, ctx: any) => {
+    if (!enabled) return;
+    const tid = String(event?.toolCallId || "");
+    if (!tid) return;
+    const sid = sidOf(ctx);
+    if (!claim(sid)) return;
+    const isErr = !!event?.isError;
+    if (isErr) {
+      const s = sessions.get(sid);
+      if (s) s.fails++;
+    }
+    emit({
+      kind: "tool-end",
+      sid,
+      tid,
+      ok: !isErr,
+      ms:
+        typeof event?.durationMs === "number" && event.durationMs >= 0
+          ? Math.round(event.durationMs)
+          : null,
+    });
   });
 
   pi.on("agent_start", async (_event: any, ctx: any) => {
     const s = sess(ctx);
     s.seg = "";
+    s.t0 = Date.now();
+    s.tools = 0;
+    s.fails = 0;
+    s.names = [];
+    s.history = []; // 新一轮重新起一条线，别接着上一轮的尾巴
     emit({ kind: "start", sid: sidOf(ctx) });
   });
 
   pi.on("agent_end", async (_event: any, ctx: any) => {
     const s = sess(ctx);
-    flushSeg(s, sidOf(ctx));
-    emit({ kind: "end", sid: sidOf(ctx) });
+    const sid = sidOf(ctx);
+    // 收尾不让 claim 挡：两份实例都可能收到 agent_end，靠下面的幂等去重
+    SHARED.recent.push(`${new Date().toTimeString().slice(0, 8)} agent_end-enter sid=${sid.slice(0, 8)} inst=${INSTANCE}`);
+    if (SHARED.recent.length > 40) SHARED.recent.shift();
+    flushSeg(s, sid);
+    const info = {
+      ms: s.t0 ? Date.now() - s.t0 : 0,
+      steps: s.tools,
+      fails: s.fails,
+      names: s.names.slice(0, 20),
+    };
+    s.t0 = 0;
+    s.tools = 0;
+    s.fails = 0;
+    s.names = [];
+    emit({ kind: "end", sid });
+    // 一轮只发一条结论：两份实例都跑 agent_end 时只留第一条
+    const nowS = Date.now();
+    if (SHARED.lastSummary && SHARED.lastSummary.sid === sid && nowS - SHARED.lastSummary.t < 15000) return;
+    SHARED.lastSummary = { sid, t: nowS };
+    // 结论异步补发：先让条子切到“收尾”，模型慢也不堵这一轮
+    roundSummary(ctx, info)
+      .then((text) => {
+        if (text) emit({ kind: "summary", sid, text, ms: info.ms, steps: info.steps, fails: info.fails });
+      })
+      .catch(() => {});
   });
 
   const liveCmd = {
