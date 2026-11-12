@@ -1,6 +1,6 @@
 {
   "name": "@duanz/pi-d-split",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "会话聊偏了按切点拆成两个独立会话，原会话不动",
   "type": "module",
   "keywords": [

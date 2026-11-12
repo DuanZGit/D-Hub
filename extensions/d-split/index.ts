@@ -16,7 +16,7 @@
 
 import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Type } from "typebox";
@@ -190,6 +190,28 @@ function timeline(chain: Entry[]): string {
 	return lines.slice(-MAX_TIMELINE).join("\n");
 }
 
+function listWorkspaces(): string {
+	// 扫 sessions 目录下的文件夹，按用户的双字叠名习惯（购物购物/折脾折腾）列出候选归属。
+	// 拆分时模型参考这个清单给 moveTo 选目标，没有合适的就推荐新建同名目录。
+	const root = join(AGENT_DIR, "sessions");
+	try {
+		return readdirSync(root, { withFileTypes: true })
+			.filter((d) => d.isDirectory() && d.name.startsWith("--") && d.name.endsWith("--"))
+			.map((d) => {
+				const cwd = "/" + d.name.slice(2, -2).replaceAll("-", "/");
+				let count = 0;
+				try {
+					count = readdirSync(join(root, d.name)).filter((f) => f.endsWith(".jsonl")).length;
+				} catch {}
+				return `${cwd}（${count} 个会话）`;
+			})
+			.sort()
+			.join("\n");
+	} catch {
+		return "（读取 sessions 目录失败）";
+	}
+}
+
 async function resolvePort(sessionId: string): Promise<string | null> {
 	for (const port of CANDIDATE_PORTS) {
 		try {
@@ -301,7 +323,10 @@ export default function dSplit(pi: ExtensionAPI) {
 								`${timeline(chain)}\n\n` +
 								"挑 2-3 个候选切点报给用户，等确认后再带 cutAt 调一次真正拆分。" +
 								"切点应落在「新话题第一条用户消息」的前一条。" +
-								"拆出的大段要归到别的文件夹时带 moveTo（绝对路径），原会话要改标题时带 nameOriginal。",
+								"拆出的大段要归到别的文件夹时带 moveTo（绝对路径），原会话要改标题时带 nameOriginal。" +
+								"moveTo 的选择规则：看拆出段聊的内容匹配哪个现有工作目录（购物内容归购物购物、技术折腾归折脾折腾），" +
+								"语义上都不匹配时推荐新建双字叠名目录（如「烧饭烧饭」），并把推荐理由告诉用户；" +
+								"A、B 两段都要按各自主题取描述性标题（nameA/nameOriginal），不要沿用旧标题。",
 						},
 					],
 					details: { mode: "timeline", entries: chain.length },
@@ -520,7 +545,7 @@ export default function dSplit(pi: ExtensionAPI) {
 			if (!file || !leaf) return;
 			const { entries } = loadSession(file);
 			const { chain } = chainToLeaf(entries, leaf);
-			const report = timeline(chain);
+			const report = `${timeline(chain)}\n\n== 现有工作目录（moveTo 候选，不合适就推荐新建同名目录） ==\n${listWorkspaces()}`;
 			try {
 				ctx.ui.notify(report || "当前分支没有可拆内容", "info");
 			} catch {
