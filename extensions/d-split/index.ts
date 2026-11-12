@@ -16,7 +16,7 @@
 
 import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Type } from "typebox";
@@ -257,7 +257,19 @@ export default function dSplit(pi: ExtensionAPI) {
 				Type.String({
 					description:
 						"拆完要不要自动起跑：'both'（默认，两边各发一句开场白）| 'b'（只给 B 发）| 'none'",
-				}),
+					}),
+			),
+			nameOriginal: Type.Optional(
+				Type.String({
+					description:
+						"拆完给原会话改的新标题（原会话大段内容被抽走后旧标题往往名不符实）",
+					}),
+			),
+			moveTo: Type.Optional(
+				Type.String({
+					description:
+						"把 B 会话归到另一个工作目录（绝对路径）：文件写到该目录的 sessions 文件夹并改写 header cwd，pi-web 侧栏按它分组",
+					}),
 			),
 		}),
 		async execute(
@@ -288,7 +300,8 @@ export default function dSplit(pi: ExtensionAPI) {
 								`当前分支时间轴（共 ${chain.length} 个条目，最后 ${MAX_TIMELINE} 条）：\n\n` +
 								`${timeline(chain)}\n\n` +
 								"挑 2-3 个候选切点报给用户，等确认后再带 cutAt 调一次真正拆分。" +
-								"切点应落在「新话题第一条用户消息」的前一条。",
+								"切点应落在「新话题第一条用户消息」的前一条。" +
+								"拆出的大段要归到别的文件夹时带 moveTo（绝对路径），原会话要改标题时带 nameOriginal。",
 						},
 					],
 					details: { mode: "timeline", entries: chain.length },
@@ -308,6 +321,19 @@ export default function dSplit(pi: ExtensionAPI) {
 			const dir = dirname(file);
 			const cwd = String(header.cwd ?? ctx.cwd);
 			const taken = new Set(entries.map((e) => String(e.id)));
+
+			// moveTo：B 会话归到另一个 cwd。pi-web 按会话文件 header 里的 cwd 分组，
+			// 所以目录和 header 都要跟着改，拆完不用再手动挪文件。
+			let bDir = dir;
+			let bCwd = cwd;
+			const moveTo = String(params.moveTo ?? "").trim();
+			if (moveTo) {
+				if (!moveTo.startsWith("/")) throw new Error(`moveTo 要绝对路径，收到：${moveTo}`);
+				const encoded = `--${moveTo.replace(/^\//, "").replaceAll("/", "-")}--`;
+				bDir = join(AGENT_DIR, "sessions", encoded);
+				mkdirSync(bDir, { recursive: true });
+				bCwd = moveTo;
+			}
 
 			// A 段：原样复制，头部挂一条可见标记，末尾补会话名。
 			const titleA = String(params.nameA ?? "").trim();
@@ -383,11 +409,34 @@ export default function dSplit(pi: ExtensionAPI) {
 					name: titleB,
 				});
 			}
-			const B = writeSessionFile(dir, cwd, bEntries);
+			const B = writeSessionFile(bDir, bCwd, bEntries);
+
+			// 原会话改名：大段内容被抽走后旧标题往往名不符实，补一条 session_info。
+			const nameOriginal = String(params.nameOriginal ?? "").trim();
+			let renamed = false;
+			const failures: string[] = [];
+			if (nameOriginal) {
+				try {
+					appendFileSync(
+						file,
+						`${JSON.stringify({
+							type: "session_info",
+							id: shortId(taken),
+							parentId: leaf,
+							timestamp: nowIso(),
+							name: nameOriginal,
+						})}\n`,
+					);
+					renamed = true;
+				} catch (error) {
+					failures.push(
+						`原会话改名失败：${error instanceof Error ? error.message : String(error)}`,
+					);
+				}
+			}
 
 			const wakeMode = String(params.wake ?? "both").toLowerCase();
 			const started: string[] = [];
-			const failures: string[] = [];
 			if (wakeMode !== "none") {
 				const port = await resolvePort(A.id);
 				if (!port) {
@@ -423,6 +472,7 @@ export default function dSplit(pi: ExtensionAPI) {
 				`d-split ${file} cut=${cut.id} A=${A.id} B=${B.id} wake=${wakeMode} started=${started.length}`,
 			);
 
+			const share = Math.round((partA.length / chain.length) * 100);
 			const lines = [
 				"拆分完成，原会话没有改动。",
 				"",
@@ -430,12 +480,19 @@ export default function dSplit(pi: ExtensionAPI) {
 				`  id     ${A.id}`,
 				`  file   ${A.file}`,
 				"",
-				`B 会话（切点之后）：${titleB || "未命名"}`,
+				`B 会话（切点之后）：${titleB || "未命名"}${moveTo ? `（已归到 ${moveTo}）` : ""}`,
 				`  id     ${B.id}`,
 				`  file   ${B.file}`,
 				"",
-				`A 段 ${partA.length} 个条目，B 段 ${partB.length} 个条目。`,
+				`A 段 ${partA.length} 个条目（占原会话 ${share}%），B 段 ${partB.length} 个条目。`,
 			];
+			if (renamed) lines.push(`原会话已改名为「${nameOriginal}」。`);
+			if (share < 25 && partB.length > partA.length) {
+				lines.push(
+					`注意：切点很靠后，原会话只剩 ${share}% 内容。` +
+						"如果留下的小段才是主线，考虑反向拆分：把大段拆出去、小段留原会话。",
+				);
+			}
 			if (started.length) lines.push(`已自动起跑：${started.join("、")}`);
 			if (failures.length) lines.push(`未完成：${failures.join("；")}`);
 			lines.push("pi-web 侧栏可能要刷新一次才看得到新会话。");
@@ -446,7 +503,8 @@ export default function dSplit(pi: ExtensionAPI) {
 					mode: "split",
 					cutEntryId: cut.id,
 					a: { id: A.id, file: A.file, entries: partA.length, title: titleA },
-					b: { id: B.id, file: B.file, entries: partB.length, title: titleB },
+					b: { id: B.id, file: B.file, entries: partB.length, title: titleB, movedTo: moveTo || undefined },
+					renamedOriginal: renamed ? nameOriginal : undefined,
 					started,
 					failures,
 				},
