@@ -1,6 +1,6 @@
 {
   "name": "@duanz/pi-d-live",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "把模型思考与工具调用实时改写成内心独白，推到 pi-web 界面顶部浮层",
   "type": "module",
   "keywords": [

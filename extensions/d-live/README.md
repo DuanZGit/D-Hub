@@ -32,7 +32,8 @@ pi agent 事件 → 按句切段 → ctx.modelRegistry.complete() 改写 → 本
 - 切段：至少 70 字才允许按句号切，硬上限 300 字；队列上限 4 段，超了丢新段，保证实时性
 - 改写：单次硬超时 12 秒；不写文件名、函数名、端口、路径
 - 隔离：每条推送带 `sid`，前端只播当前会话的
-- 工具名走零延迟映射表（`read` → 「看一眼」），不调模型
+- 工具行先用零延迟规则占位（`read` → 「看一眼」），随后由模型改写成「在哪找什么、为了什么」，慢一点但更具体
+- emoji 不强制、不固定：模型按内容自己决定放哪、放几个，前端不补也不挪位置
 
 ## 用法
 
@@ -46,7 +47,7 @@ pi agent 事件 → 按句切段 → ctx.modelRegistry.complete() 改写 → 本
 
 ## 前置条件
 
-浮层是前端代码，需要 pi-web 侧注入：`cn-assets/pi-web-live.js` 由 `patches.json` 以 inline 方式注进 `public/sw.js`，由 [pi-web-patch-keeper](https://github.com/DuanZGit/D-Hub/tree/master/extensions/pi-web-patch-keeper) 在 pi-web 升级后重放。
+浮层是前端代码，需要 pi-web 侧注入：`cn-assets/d-live.js` 由 `patches.json` 以 inline 方式注进 `public/sw.js`，由 [pi-web-patch-keeper](https://github.com/DuanZGit/D-Hub/tree/master/extensions/pi-web-patch-keeper) 在 pi-web 升级后重放。
 
 没有这层注入时，扩展的 SSE 服务照常工作，只是页面上看不到浮层。
 

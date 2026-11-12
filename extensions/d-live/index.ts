@@ -87,11 +87,11 @@ const SYS = `把下面这段思考，改写成给用户看的进度解说：正�
 规则：
 - 说人话，像朋友在旁边随口讲一句，带点画面感，可以用「先翻翻」「挨个对一遍」「这就去」「稳了」这类口语；
 - 不用第一人称，不出现"我"；用无主语或"正在/已经/接下来/这就"开头；
-- 每句 16~24 字，把前因后果说完整：先说要做什么或看到什么，再说为什么这么选；
-- 最多 ${MAX_LINES} 句，每句一行；每句开头放 1 个贴切的 emoji，句尾必须有标点（…… / 。 / ！）；
+- 每句 16~22 字，把前因后果说完整：先说要做什么或看到什么，再说为什么这么选；
+- 最多 ${MAX_LINES} 句，每句一行；句尾必须有标点（…… / 。 / ！）；emoji 随内容自然用，放句首、句中、句尾都行，也可以整句不放，种类跟着内容走，别老是那两三个，也别每句都放；
 - 一轮里只围绕一个目标往前推，几句连起来要像同一条线：第二句起用「接着」「于是」「这下」「所以」「接下来」「顺手」这类词承接上一句，别忽然跳到无关的事，也别重复前面说过的内容；
 - 输入里若给了「前面已经说过」，就从那儿接着往下说，把新的发现和下一步接上，不要另起炉灶；
-- emoji 别重复；句子要生动，避免「正在处理」「进行分析」这类空话；
+- 同一段里别重复用同一个 emoji；句子要生动，避免「正在处理」「进行分析」这类空话；
 - 不写文件名、函数名、端口、路径、命令、缩写字母（JS/CSS/SSE/API 这类），一律换成日常说法；
 - 不加引号和编号，不模仿用户语气；
 - 必须真的改写：禁止照抄原文里的任何句子、列表、表格、日志；原文里的工具输出直接跳过不写；
@@ -282,8 +282,8 @@ export function bashIntent(cmd: unknown): string {
 }
 
 const CMD_SYS = `你看到的是 AI 助手刚刚执行的一条命令，以及它执行前在想什么。
-用一句中文说出这条命令的**意图**：它想达成什么、想确认什么、想找出什么。说意图，不说手段，说得口语、有画面感。
-规则：16 字以内；句首放 1 个贴切的 emoji，句尾加标点（…… 或 。）；不要出现命令名、文件名、路径、参数、端口、缩写字母；不要引号和编号。
+用一句中文说出这条命令的**意图**：在哪找什么、想确认什么、为了什么。要具体到对象，别只说「查一下」「跑一下」这种空话，说得口语、有画面感。
+规则：24 字以内；句尾加标点（…… 或 。）；emoji 可用可不用，用就贴切，别每句都放；不要出现命令名、参数、端口、缩写字母（文件名可以保留）；不要引号和编号。
 只输出这一句话。`;
 
 /** 让模型说清这条命令到底想干嘛；超时或失败返回空串，由 bashIntent 规则兜底。 */
@@ -324,8 +324,61 @@ async function cmdIntent(ctx: any, cmd: string, hint = ""): Promise<string> {
   }
 }
 
+const TOOL_SYS = `你看到的是 AI 助手刚要做的一件事（工具名 + 参数），以及它动手前的想法。
+用一句中文说清：在什么里面、找什么/看什么/改什么、想确认什么、为了什么。要具体到对象，别只说「看文件」「搜一下」这种空话。
+规则：24 字以内；句尾加标点（…… 或 。）；emoji 可用可不用，用就贴切；不要出现参数名、缩写字母；不要引号和编号。
+只输出这一句话。`;
+
+/** 让模型说清这件工具活儿具体在干什么；超时或失败返回空串，由规则版兜底。 */
+async function toolIntent(ctx: any, name: string, args: any, hint = ""): Promise<string> {
+  const model = pickModel(ctx);
+  if (!model) return "";
+  let brief = "";
+  try {
+    brief = JSON.stringify(args ?? {}, null, 0).slice(0, 600);
+  } catch {
+    brief = String(args ?? "").slice(0, 600);
+  }
+  if (!brief || brief === "{}") return "";
+  try {
+    const res: any = await Promise.race([
+      ctx.modelRegistry.complete(
+        model,
+        {
+          systemPrompt: TOOL_SYS,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text:
+                    (hint ? `他刚才在想：${hint.slice(-300)}\n\n` : "") +
+                    `工具：${name}\n参数：${brief}`,
+                },
+              ],
+              timestamp: Date.now(),
+            },
+          ],
+        },
+        { cacheRetention: "none" },
+      ),
+      new Promise((r) => setTimeout(() => r(null), 5000)),
+    ]);
+    if (!res) return "";
+    const out = (res.content || [])
+      .filter((c: any) => c.type === "text")
+      .map((c: any) => c.text)
+      .join("")
+      .trim();
+    return out.split("\n")[0].replace(/^[-•*\d.、)\s]+/, "").replace(/[""'']/g, "").slice(0, 60);
+  } catch {
+    return "";
+  }
+}
+
 const SUMMARY_SYS = `用一句中文向用户交代：这一轮到底干了什么、成没成。
-规则：30 字以内；说结果，不说过程；口语一点，别用「已完成」「进行处理」这类空话；不出现文件名、路径、命令、缩写字母；不加引号编号；句首 1 个 emoji，句尾加标点。
+规则：30 字以内；说结果，不说过程；口语一点，别用「已完成」「进行处理」这类空话；不出现文件名、路径、命令、缩写字母；不加引号编号；emoji 可用可不用，别每句都放。
 只输出这一句话。`;
 
 /** 一轮跑完给一句结论。模型超时或说得不像就用规则句兜底，永远不空着。 */
@@ -334,7 +387,7 @@ async function roundSummary(
   info: { ms: number; steps: number; fails: number; names: string[] },
 ): Promise<string> {
   const sec = info.ms > 0 ? Math.round(info.ms / 1000) : 0;
-  const fallback = `🎯 这一轮想完了，${sec}s、${info.steps} 步${info.fails ? `，有 ${info.fails} 处没成` : "，都顺"}。`;
+  const fallback = `这一轮想完了，${sec}s、${info.steps} 步${info.fails ? `，有 ${info.fails} 处没成` : "，都顺"}。`;
   const model = pickModel(ctx);
   if (!model || info.steps === 0) return fallback;
   const kinds = [...new Set(info.names)].slice(0, 6).join("、");
@@ -481,8 +534,11 @@ function emit(payload: Record<string, unknown>) {
     if (last && last.k === key && now - last.t < 150) return;
     SHARED.lastEmit = { k: key, t: now };
     const t = new Date().toTimeString().slice(0, 8);
-    recent.push(`${t} ${String(payload.kind)} sid=${String(payload.sid || "-").slice(0, 8)}`);
-    if (recent.length > 40) recent.splice(0, recent.length - 40);
+    // effort 每秒都在蹦，留着会把别的播报挤出去，诊断时看不见
+    if (String(payload.kind) !== "effort") {
+      recent.push(`${t} ${String(payload.kind)} sid=${String(payload.sid || "-").slice(0, 8)}`);
+      if (recent.length > 60) recent.splice(0, recent.length - 60);
+    }
   } catch {}
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   const sid = typeof payload.sid === "string" ? payload.sid : "";
@@ -535,6 +591,29 @@ function shouldCut(s: string): boolean {
 // 系统注入的上下文（压缩块、记忆注入）长得像“思考”，但不是，不能播给用户
 const NOISE =
   /(CONTEXT BREAKDOWN|COMPRESSED BLOCKS|openviking-context|OpenViking context|\[ACP\]|Compressed m\d|<acp\b|viking:\/\/|User said \(m\d)/i;
+/** 一句太长就按标点切成两句：一行放得下才不用缩字或换行 */
+function splitLong(line: string, max = 22): string[] {
+  let rest = String(line || "").trim();
+  if (!rest) return [];
+  const out: string[] = [];
+  while (rest.length > max) {
+    const head = rest.slice(0, max);
+    let cut = -1;
+    for (let i = head.length - 1; i >= 8; i--) {
+      if ("，,、；;：:。！？!?".includes(head[i])) {
+        cut = i;
+        break;
+      }
+    }
+    if (cut < 0) cut = max - 1;
+    const piece = rest.slice(0, cut + 1).replace(/[，,、；;：:\s]+$/, "");
+    out.push(/[。！？!?]$/.test(piece) ? piece : piece + "。");
+    rest = rest.slice(cut + 1).trim();
+  }
+  if (rest) out.push(/[。！？!?]$/.test(rest) ? rest : rest + "。");
+  return out;
+}
+
 function isNoise(text: string): boolean {
   return NOISE.test(text);
 }
@@ -632,8 +711,11 @@ function rewrite(s: Sess, sid: string, text: string) {
           )
           .slice(0, MAX_LINES);
         if (lines.length) {
-          emit({ kind: "lines", sid, lines });
-          s.history = s.history.concat(lines).slice(-8);
+          // 一条播报只放一句能塞进一行的：太长的按标点切成两句，免得手机上前端被迫缩字换行
+          const capped: string[] = [];
+          for (const line of lines) for (const piece of splitLong(line)) capped.push(piece);
+          emit({ kind: "lines", sid, lines: capped });
+          s.history = s.history.concat(capped).slice(-8);
         }
       } catch (e: any) {
         const name = String(e?.name || "");
@@ -678,7 +760,7 @@ function startServer() {
     if (url.startsWith("/ping")) {
       const qq = url.includes("?") ? new URLSearchParams(url.slice(url.indexOf("?") + 1)) : null;
       pings.push(
-        `${new Date().toISOString().slice(11, 19)} ${qq?.get("step") || "?"} p=${qq?.get("pid") || "?"} sid=${(qq?.get("sid") || "-").slice(0, 8)}`,
+        `${new Date().toISOString().slice(11, 19)} ${qq?.get("step") || "?"} p=${qq?.get("pid") || "?"} sid=${(qq?.get("sid") || "-").slice(0, 8)} v=${qq?.get("v") || "?"} src=${qq?.get("src") || "?"} u=${(qq?.get("u") || "").slice(0, 40)}`,
       );
       if (pings.length > 40) pings.shift();
       res.writeHead(204);
@@ -786,7 +868,17 @@ export default function piWebLive(pi: ExtensionAPI) {
         .catch(() => {});
       return;
     }
-    emit({ kind: "tool", sid, tid: tid || null, text: describeTool(name, event?.args) });
+    {
+      const key = tid || `t${Date.now()}`;
+      const placeholder = describeTool(name, event?.args);
+      emit({ kind: "tool", sid, tid: key, text: placeholder });
+      // 规则版只说了「在文件里找 xxx」，再让模型说清在什么里找什么、为了啥
+      toolIntent(ctx, name, event?.args, s.seg || "")
+        .then((said) => {
+          if (said && said !== placeholder) emit({ kind: "tool-intent", sid, tid: key, text: said });
+        })
+        .catch(() => {});
+    }
   });
 
   // 工具跑完了：告诉前端这一行的成败与耗时（成败和耗时都由 pi 自己测，不用前端算）
