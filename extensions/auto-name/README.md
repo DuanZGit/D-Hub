@@ -4,7 +4,7 @@
 
 <p align="center"><img src="https://raw.githubusercontent.com/DuanZGit/D-Hub/master/docs/covers/auto-name.png" alt="auto-name cover" width="880"></p>
 
-<p align="center"><strong>会话聊到一定量，标题自己换成能看懂的那句</strong><br><sub>两层命名 · 首条消息秒命名 · 每 6 条用户消息精修一次 · 手动改过的名字不再被覆盖</sub></p>
+<p align="center"><strong>会话聊到一定量，标题自己换成能看懂的那句</strong><br><sub>两层命名 · 首条消息秒命名 · 每 3 条用户消息精修一次 · 手动改过的名字不再被覆盖</sub></p>
 
 <p align="center">
 <a href="https://www.npmjs.com/package/@duanz/pi-auto-name"><img src="https://img.shields.io/npm/v/@duanz%2Fpi-auto-name.svg?style=flat-square" alt="npm"></a>
@@ -23,8 +23,8 @@
 
 这个扩展让标题自己长出来，分两层：
 
-1. **零成本起名**：agent 刚启动、会话还没有名字时，直接把第一条用户消息的前 24 个字设成标题。侧栏和完成通知立刻可辨识。
-2. **模型精修**：每轮彻底跑完后检查一次，距上次命名新增 ≥ 6 条用户消息，就调 pi-web 的 `POST /api/sessions/:id/auto-name` 重新生成一次标题。
+1. **零成本起名**：agent 刚启动、会话还没有名字时，直接把第一条用户消息的前 24 个字设成标题。侧栏和完成通知立刻可辨识。首轮启动常常拿不到会话条目，所以一轮跑完时还会补一次，保证只聊一句的会话也有名字。
+2. **模型精修**：每轮彻底跑完后检查一次，距上次命名新增 ≥ 3 条用户消息，就调 pi-web 的 `POST /api/sessions/:id/auto-name` 重新生成一次标题。
 
 两层之间用状态文件隔开，不会每轮都去调模型。
 
@@ -44,7 +44,7 @@ CLI 模式下没有 `PI_SESSION_ID`，扩展自己跳过，不会报错。
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `AUTO_NAME_STEP` | `6` | 新增多少条用户消息触发一次精修（工具调用不计） |
+| `AUTO_NAME_STEP` | `3` | 新增多少条用户消息触发一次精修（工具调用不计） |
 | `AUTO_NAME_DEBOUNCE` | `300` | 两次命名的最小间隔（秒） |
 | `AUTO_NAME_KEEP_SIM` | `0.7` | 新旧标题相似度达到该值就保留旧标题，设 `0` 关闭 |
 | `AUTO_NAME_QUICK_MAX` | `24` | 首层截断的最大字数 |
@@ -59,7 +59,7 @@ CLI 模式下没有 `PI_SESSION_ID`，扩展自己跳过，不会报错。
 ## 限制
 
 - 需要 pi-web 的 auto-name 接口，纯 CLI 环境不生效。
-- 精修会消耗当前模型的 token，所以有 6 条用户消息 + 300 秒双阈值挡着。
+- 精修会消耗当前模型的 token，所以有 3 条用户消息 + 300 秒双阈值挡着。
 - 相似度判断只能拦住措辞微调；主题真的换了但用词接近时，可能多留一次旧标题。
 
 ## License

@@ -4,7 +4,7 @@
 
 <p align="center"><img src="https://raw.githubusercontent.com/DuanZGit/D-Hub/master/docs/covers/auto-name.png" alt="auto-name cover" width="880"></p>
 
-<p align="center"><strong>Session titles rename themselves once a conversation grows</strong><br><sub>Two-tier naming · instant title from the first message · refine every 6 user messages · manual renames are never overwritten</sub></p>
+<p align="center"><strong>Session titles rename themselves once a conversation grows</strong><br><sub>Two-tier naming · instant title from the first message · refine every 3 user messages · manual renames are never overwritten</sub></p>
 
 <p align="center">
 <a href="https://www.npmjs.com/package/@duanz/pi-auto-name"><img src="https://img.shields.io/npm/v/@duanz%2Fpi-auto-name.svg?style=flat-square" alt="npm"></a>
@@ -23,8 +23,8 @@ A new session title is either empty or the first message cut off mid-sentence. T
 
 This extension grows titles on its own, in two tiers:
 
-1. **Free naming** — when the agent starts and the session has no title, take the first 24 characters of the first user message. The sidebar and completion notifications become readable immediately.
-2. **Model refinement** — after each completed turn, if at least 6 new user messages appeared since the last naming, call pi-web's `POST /api/sessions/:id/auto-name` to regenerate.
+1. **Free naming** — when the agent starts and the session has no title, take the first 24 characters of the first user message. The sidebar and completion notifications become readable immediately. The first `agent_start` often cannot see the session entries yet, so it also retries once when the turn settles, which covers sessions that end after a single message.
+2. **Model refinement** — after each completed turn, if at least 3 new user messages appeared since the last naming, call pi-web's `POST /api/sessions/:id/auto-name` to regenerate.
 
 State the last naming per session, so it never calls a model every turn.
 
@@ -44,7 +44,7 @@ In CLI mode there is no `PI_SESSION_ID`, so the extension skips itself silently.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `AUTO_NAME_STEP` | `6` | New user messages required before a refinement (tool calls do not count) |
+| `AUTO_NAME_STEP` | `3` | New user messages required before a refinement (tool calls do not count) |
 | `AUTO_NAME_DEBOUNCE` | `300` | Minimum seconds between renames |
 | `AUTO_NAME_KEEP_SIM` | `0.7` | Keep the old title when similarity reaches this value; `0` disables |
 | `AUTO_NAME_QUICK_MAX` | `24` | Max characters for the instant title |
@@ -59,7 +59,7 @@ In CLI mode there is no `PI_SESSION_ID`, so the extension skips itself silently.
 ## Limits
 
 - Requires pi-web's auto-name endpoint; no effect in pure CLI.
-- Refinement costs tokens from the current model, hence the 6-user-message / 300-second gates.
+- Refinement costs tokens from the current model, hence the 3-user-message / 300-second gates.
 - Similarity only catches rewording; if the topic truly changed but the wording stayed close, an old title may survive one extra round.
 
 ## License

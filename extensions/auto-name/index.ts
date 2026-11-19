@@ -6,6 +6,8 @@
  *      （零模型成本，通知/侧栏立刻可辨识）；
  *   2. 每轮 agent 彻底跑完后检查一次，距上次命名新增 ≥ AUTO_NAME_STEP 条
  *      用户消息就调 pi-web 的 POST /api/sessions/:id/auto-name 精修。
+ * 首轮的 agent_start 常常拿不到会话条目（还没落盘），所以在 agent_settled
+ * 里补一次临时名，保证只跑一轮就结束的会话也有名字。
  * 只在 pi-web 里生效；CLI 下没有 PI_SESSION_ID，扩展自己跳过。
  *
  * 三条纪律（借鉴 DeepSeek Harness 的 session-title 设计）：
@@ -14,7 +16,7 @@
  *   - 单飞：同一会话同时只允许一次命名，不同会话互不阻塞。
  *
  * 环境变量：
- *   AUTO_NAME_STEP      新增多少条用户消息触发一次精修（默认 6）
+ *   AUTO_NAME_STEP      新增多少条用户消息触发一次精修（默认 3）
  *   AUTO_NAME_DEBOUNCE  两次命名最小间隔秒数（默认 300）
  *   AUTO_NAME_KEEP_SIM  新旧标题相似度 ≥ 该值就保留旧标题（默认 0.7，0 关闭）
  *   AUTO_NAME_OFF=1     临时关闭
@@ -33,7 +35,7 @@ const AGENT_DIR = join(homedir(), ".pi", "agent");
 const STATE_FILE = join(AGENT_DIR, "auto-name-state.json");
 const LOG_FILE = join(AGENT_DIR, "auto-name.log");
 
-const STEP = Math.max(1, Number(process.env.AUTO_NAME_STEP ?? 6));
+const STEP = Math.max(1, Number(process.env.AUTO_NAME_STEP ?? 3));
 const QUICK_NAME_MAX = Math.max(6, Number(process.env.AUTO_NAME_QUICK_MAX ?? 24));
 const DEBOUNCE_MS = Math.max(0, Number(process.env.AUTO_NAME_DEBOUNCE ?? 300)) * 1000;
 const KEEP_SIM = Math.min(1, Math.max(0, Number(process.env.AUTO_NAME_KEEP_SIM ?? 0.7)));
@@ -217,6 +219,19 @@ export default function autoName(pi: ExtensionAPI) {
 
 		const count = countUserMessages(ctx.sessionManager.getEntries() as LooseEntry[]);
 		const baseline = last?.count ?? 0;
+
+		// 首轮的 agent_start 常常拿不到条目，补一次临时名。
+		// 只在扩展自己没写过名字时补，避免跟手动清空名字的操作打架。
+		if (!currentName && !last?.name) {
+			const quick = quickName(ctx.sessionManager.getEntries() as LooseEntry[]);
+			if (quick) {
+				pi.setSessionName(quick);
+				state[sessionId] = { count: baseline, at: last?.at ?? 0, name: quick, pinned: last?.pinned };
+				saveState(state);
+				log(`quick ${sessionId}: "${quick}"`);
+				return;
+			}
+		}
 		if (count - baseline < STEP) return;
 		if (last && Date.now() - last.at < DEBOUNCE_MS) return;
 
