@@ -72,8 +72,8 @@ KEEP_AUTO: dict[str, str] = {
     "reverse-engineer-anything": "逆向/拆包/复刻",
     "openviking-docs": "OV 文档/配置",
     "impeccable": "前端界面设计",
-    # 入口技能自己藏起来就等于没了 —— 用户不会手打 /ask-me 才来找技能
-    "ask-me": "不知道该用哪个技能/有什么技能能用",
+    # 2026-11-21 用户要求关闭 ask-me 的自动触发：改为显式（/ask-me 手动调用）。
+    # 若日后要恢复自动：删掉 SKILL.md 里的 disable-model-invocation，再把条目加回本表。
 }
 
 BACKUP_ROOT = Path.home() / ".agents" / "backups"

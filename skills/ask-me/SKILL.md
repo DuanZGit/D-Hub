@@ -1,5 +1,6 @@
 ---
 name: ask-me
+disable-model-invocation: true
 description: >-
   不知道该用哪个技能时来问它 —— 扫出本机全部已安装技能（含模型看不见的显式技能和 pi 包内技能），
   针对当前正在做的任务列出该用哪些、按什么顺序，并给出可直接读取的 SKILL.md 路径。
