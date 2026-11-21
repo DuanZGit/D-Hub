@@ -82,21 +82,42 @@ function startEffortWatcher(emitFn: (p: Record<string, unknown>) => void) {
   if (typeof timer.unref === "function") timer.unref();
 }
 
-const SYS = `把下面这段思考，改写成给用户看的进度解说：正在做什么、为什么要这么做、做完会怎样。
+const SYS = `把下面这段思考，改写成给用户看的进度解说：正在做什么、为什么这么做、做完会怎样。
+
+最重要的一条——每一句单独拎出来，也要让人看得懂“这是在为哪件事、做到哪一步”：
+- 句子里必须带出这件事本身，用 2~6 个字的短名字把目标点明，例如“思考条字句”“版本升级”“接线这套”“硬盘快满”；
+- 这个短名字要出现在每一句里（或紧挨着它的对象），不能只第一句有、后面全丢；
+- 句子要带出这一步在干嘛/为什么这么干，而不是只报一个动作；
+- 禁止「先翻翻」「对一下」「这就改」「已确认」「跑通了」这种只有动作、没有对象的半截话，也禁止用「接着」「这下」「于是」开头却不交代主语。
+
+反面例子（不要写成这样）：先翻翻最近吐出来的几句。会话里的动静已经跑通了。这下页面那头一接回来。
+正面例子（要写成这样）：思考条字句还差点火候，先翻翻最近吐出来的几句。思考条这条线已经跑通了，页面那头一接回来就能看见。
 
 规则：
-- 说人话，像朋友在旁边随口讲一句，带点画面感，可以用「先翻翻」「挨个对一遍」「这就去」「稳了」这类口语；
-- 不用第一人称，不出现"我"；用无主语或"正在/已经/接下来/这就"开头；
-- 每句 16~22 字，把前因后果说完整：先说要做什么或看到什么，再说为什么这么选；
-- 最多 ${MAX_LINES} 句，每句一行；句尾必须有标点（…… / 。 / ！）；emoji 随内容自然用，放句首、句中、句尾都行，也可以整句不放，种类跟着内容走，别老是那两三个，也别每句都放；
-- 一轮里只围绕一个目标往前推，几句连起来要像同一条线：第二句起用「接着」「于是」「这下」「所以」「接下来」「顺手」这类词承接上一句，别忽然跳到无关的事，也别重复前面说过的内容；
+- 第一句先交代这次要解决的是什么事、卡在哪（从输入里判断，不要照抄）；
+- 第二句起每句都要回扣同一件事，说清“现在这一步是在给这件事解决什么”，句间用「接着」「这下」「于是」这类词接上；
+- 说人话，像朋友在旁边随口讲一句，带点画面感，可以用「挨个对一遍」「这就去」「稳了」这类口语；语气轻快些，带点小惊喜小得意，像「哟，这几份正好对上了」「顺手就捋顺了」「好家伙，藏得还挺深」这种；
+- 不用第一人称，不出现“我”；用无主语或“正在/已经/接下来/这就”开头；
+- 每句 16~26 字，前因后果要完整：先说要解决的事，再说这一步怎么推；
+- 最多 ${MAX_LINES} 句，每句一行；句尾必须有标点（…… / 。 / ！）；每句带 1~2 个 emoji，贴着内容挑：翻东西 🔍📂、想办法 💡🧩、动手 🛠️✍️、顺当 ✅🎉、卡住 🤔⚠️、收尾 🎯✨；往句子中间穿插一个，或放在句尾收一下都行，别一段里老用同一个，也别硬塞不相关的；
+- 一轮里只围绕一个目标往前推，几句连起来要像同一条线，别忽然跳到无关的事，也别重复前面说过的内容；
 - 输入里若给了「前面已经说过」，就从那儿接着往下说，把新的发现和下一步接上，不要另起炉灶；
-- 同一段里别重复用同一个 emoji；句子要生动，避免「正在处理」「进行分析」这类空话；
+- 同一段里别重复用同一个 emoji；句子要生动、带点小情绪，避免「正在处理」「进行分析」这类空话；
 - 不写文件名、函数名、端口、路径、命令、缩写字母（JS/CSS/SSE/API 这类），一律换成日常说法；
 - 不加引号和编号，不模仿用户语气；
 - 必须真的改写：禁止照抄原文里的任何句子、列表、表格、日志；原文里的工具输出直接跳过不写；
 - 想不出内容就少写几句，不要凑数。
 只输出这些短句，每句一行。`;
+
+/** 当前会话所在目录名，当作「这件事」的拠点递给改写模型，免得它写出不知道在干嘛的句子 */
+function projectOf(ctx: any): string {
+  try {
+    const cwd = String(ctx?.cwd || ctx?.sessionManager?.getCwd?.() || "");
+    return cwd.split("/").filter(Boolean).pop() || "";
+  } catch {
+    return "";
+  }
+}
 
 // 工具名 → 人话。不调模型，零延迟。
 const TOOL_LABEL: Record<string, string> = {
@@ -283,7 +304,7 @@ export function bashIntent(cmd: unknown): string {
 
 const CMD_SYS = `你看到的是 AI 助手刚刚执行的一条命令，以及它执行前在想什么。
 用一句中文说出这条命令的**意图**：在哪找什么、想确认什么、为了什么。要具体到对象，别只说「查一下」「跑一下」这种空话，说得口语、有画面感。
-规则：24 字以内；句尾加标点（…… 或 。）；emoji 可用可不用，用就贴切，别每句都放；不要出现命令名、参数、端口、缩写字母（文件名可以保留）；不要引号和编号。
+规则：24 字以内；句尾加标点（…… 或 。）；带 1~2 个贴切的 emoji，句中穿插或句尾收一下都行，让语气轻快些；不要出现命令名、参数、端口、缩写字母（文件名可以保留）；不要引号和编号。
 只输出这一句话。`;
 
 /** 让模型说清这条命令到底想干嘛；超时或失败返回空串，由 bashIntent 规则兜底。 */
@@ -326,7 +347,7 @@ async function cmdIntent(ctx: any, cmd: string, hint = ""): Promise<string> {
 
 const TOOL_SYS = `你看到的是 AI 助手刚要做的一件事（工具名 + 参数），以及它动手前的想法。
 用一句中文说清：在什么里面、找什么/看什么/改什么、想确认什么、为了什么。要具体到对象，别只说「看文件」「搜一下」这种空话。
-规则：24 字以内；句尾加标点（…… 或 。）；emoji 可用可不用，用就贴切；不要出现参数名、缩写字母；不要引号和编号。
+规则：24 字以内；句尾加标点（…… 或 。）；带 1~2 个贴切的 emoji，句中穿插或句尾收一下都行，语气轻快些；不要出现参数名、缩写字母；不要引号和编号。
 只输出这一句话。`;
 
 /** 让模型说清这件工具活儿具体在干什么；超时或失败返回空串，由规则版兜底。 */
@@ -378,7 +399,7 @@ async function toolIntent(ctx: any, name: string, args: any, hint = ""): Promise
 }
 
 const SUMMARY_SYS = `用一句中文向用户交代：这一轮到底干了什么、成没成。
-规则：30 字以内；说结果，不说过程；口语一点，别用「已完成」「进行处理」这类空话；不出现文件名、路径、命令、缩写字母；不加引号编号；emoji 可用可不用，别每句都放。
+规则：30 字以内；说结果，不说过程；口语一点、带点小得意，别用「已完成」「进行处理」这类空话；不出现文件名、路径、命令、缩写字母；不加引号编号；带 1~2 个贴切的 emoji，句中穿插或句尾收一下都行。
 只输出这一句话。`;
 
 /** 一轮跑完给一句结论。模型超时或说得不像就用规则句兜底，永远不空着。 */
@@ -462,6 +483,7 @@ const SHARED: any =
     clientSids: new Map<ServerResponse, string>(),
     pings: [] as string[],
     recent: [] as string[],
+    lastDropAt: 0,
     listening: false,
   });
 
@@ -502,15 +524,18 @@ const INSTANCE = Math.random().toString(36).slice(2, 8);
 /**
  * 同一会话只让一份扩展实例处理事件。
  * pi-web 会为同一个会话加载多份扩展，不去重的话模型改写、工具意图都会重复跑两遍。
+ * 所有者带心跳：真正在收事件的实例每次调 claim 都会刷新时间；重启接力遗留的
+ * 死实例不再刷新，超过 CLAIM_TTL 就让活着的实例接管，不然整条思考条会被静默挡死。
  */
+const CLAIM_TTL = 8000;
+
 function claim(sid: string): boolean {
-  if (!SHARED.owner) SHARED.owner = new Map<string, string>();
+  if (!SHARED.owner) SHARED.owner = new Map<string, any>();
+  const now = Date.now();
   const cur = SHARED.owner.get(sid);
-  if (!cur) {
-    SHARED.owner.set(sid, INSTANCE);
-    return true;
-  }
-  return cur === INSTANCE;
+  if (cur && cur.inst !== INSTANCE && now - (cur.at || 0) < CLAIM_TTL) return false;
+  SHARED.owner.set(sid, { inst: INSTANCE, at: now });
+  return true;
 }
 
 function sess(ctx: any): Sess {
@@ -548,7 +573,21 @@ function emit(payload: Record<string, unknown>) {
     // 否则一个页面会收到所有会话的播报，串到别的会话里。
     const want = clientSids.get(c) || "";
     if (!want) continue;
-    if (!unknown && want !== sid) continue;
+    if (!unknown && want !== sid) {
+      // 诊断：事件被号不对的连接挡下来时记一条（10 秒最多一条），
+      // 「条子不出现」时能一眼看出是页面连错号还是根本没事件
+      const stamp = Date.now();
+      if (stamp - (SHARED.lastDropAt || 0) > 10000) {
+        SHARED.lastDropAt = stamp;
+        try {
+          recent.push(
+            `${new Date(stamp).toTimeString().slice(0, 8)} drop sid=${sid.slice(0, 8)} want=${want.slice(0, 8)}`,
+          );
+          if (recent.length > 60) recent.splice(0, recent.length - 60);
+        } catch {}
+      }
+      continue;
+    }
     try {
       c.write(line);
     } catch {
@@ -663,9 +702,11 @@ function rewrite(s: Sess, sid: string, text: string) {
       const model = pickModel(ctx);
       if (!model) return;
       const prior = s.history.slice(-4);
-      const lead = prior.length
+      const proj = projectOf(ctx);
+      const projLine = proj ? `这件事的短名字可以参考目录名：${proj}\n` : "";
+      const lead = projLine + (prior.length
         ? "前面已经说过（接着往下讲，别重复）：\n" + prior.join("\n") + "\n\n这一段新的思考：\n"
-        : "";
+        : "");
       try {
         const res: any = await Promise.race([
           ctx.modelRegistry.complete(
@@ -913,7 +954,12 @@ export default function piWebLive(pi: ExtensionAPI) {
     s.fails = 0;
     s.names = [];
     s.history = []; // 新一轮重新起一条线，别接着上一轮的尾巴
-    emit({ kind: "start", sid: sidOf(ctx) });
+    const sid = sidOf(ctx);
+    // 安全重启接力后，同一个会话可能同时挂着两份扩展实例；claim() 只认第一个登记
+    // 的所有者，万一那份是重启前不再收事件的旧实例，后面 message_update / tool_* 全被
+    // 静默挡掉，只剩开局一下就没动静了。谁真正在驱动这一轮，谁直接拿走这个 sid。
+    if (SHARED.owner) SHARED.owner.set(sid, { inst: INSTANCE, at: Date.now() });
+    emit({ kind: "start", sid });
   });
 
   pi.on("agent_end", async (_event: any, ctx: any) => {
