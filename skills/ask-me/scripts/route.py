@@ -49,7 +49,13 @@ RE_ZH_RUN = re.compile(r"[\u4e00-\u9fff]+")
 NAME_BONUS = 8.0     # 诉求里直接报出技能名
 PRODUCT_BONUS = 2.0  # 诉求里出现产物类型（报告 / 讲解页 / 代码…）
 LONG_GRAM_W = 1.5    # 3 字词比 2 字词更判别，加权
-MANUAL_W = 2.0       # 人工触发词表的命中权重
+MANUAL_W = 3.0       # 人工触发词表的命中权重（人写的触发词比描述里的偶然词可靠得多）
+MUTED_W = 0.15       # 家族内共有词的权重："百炼""模型"对「该不该用百炼」零信息
+BM25_B = 0.75        # 长度归一强度：技能词表越长，命中越不唬人
+MIN_SCORE = 8.0      # 低于此分就是没对口技能：凑一个 3 分的答案比说“没有”更坑人
+
+# 从聊天里粘过来的噪声：脱敏占位符、图片标记、安全前缀
+RE_NOISE = re.compile(r"(@mx_[a-z_]+|__SECRET_[A-Z0-9_]+__|\{\{[^}]{1,64}\}\}|\[Image:[^\]]{0,120}\])")
 
 # 口语 → 书面词：用户说「搜一下」，描述里写的是「搜索」「检索」
 SYNONYMS: dict[str, tuple[str, ...]] = {
@@ -153,22 +159,32 @@ def score_all(data: dict, query: str, manual: dict[str, list[str]] | None = None
         return w
 
     manual = manual or {}
+    muted_map = data.get("muted") or {}
     results: list[dict] = []
+    avg_kw = (sum(len(r["kw"]) for r in data["skills"]) / len(data["skills"])) or 167.0
     for row in data["skills"]:
         kwset = set(row["kw"])
         hits = toks & kwset
-        score = sum(weight(k) * idf(k) for k in hits)
+        fam = row["name"].split("-")[0]
+        muted = set(muted_map.get(fam, ()))
+        raw = sum(weight(k) * idf(k) * (MUTED_W if k in muted else 1.0) for k in hits)
+
+        # BM25 式的长度归一：d-reach 548 个词、bailian-gen 365 个，而平均 167。
+        # 不归一的话描述长的技能先天空赢——任何一句话都能从它那儿撞到一个词。
+        norm = max(0.5, 1 - BM25_B + BM25_B * (len(kwset) / avg_kw))
+        score = raw / norm
 
         # 人工词表里写的是短语（"先写测试""上次说的"），三个字以上切词切不出来，
-        # 所以直接在原句上找子串，不靠 token 集合。
+        # 所以直接在原句上找子串，不靠 token 集合。精确信号不参与长度归一。
         mhits = {k for k in manual.get(row["name"], []) if k in query}
         if mhits:
             score += sum(MANUAL_W * (LONG_GRAM_W if len(k) >= 3 else 1.0) * idf(k) for k in mhits)
             hits = hits | mhits
 
-        # 多个词同时吐合比单个罕见词更可信
-        if len(hits) > 1:
-            score *= 1 + 0.25 * (len(hits) - 1)
+        # 多个词同时吐合比单个罕见词更可信；但只算没被家族抑制的词
+        effective = {k for k in hits if k not in muted} if muted else hits
+        if len(effective) > 1:
+            score *= 1 + 0.25 * (len(effective) - 1)
 
         name = row["name"].lower()
         if name and (name in q_low or name.replace("-", "") in q_low.replace("-", "").replace(" ", "")):
@@ -191,6 +207,19 @@ def score_all(data: dict, query: str, manual: dict[str, list[str]] | None = None
                 }
             )
 
+    # 同族抑制：bailian-cli / bailian-gen / bailian-* 这类共享十几个词，
+    # 不抑制就会把前 10 名全刷成一个家族。用户要的是 1-2 个答案，同族只需最高分那条。
+    best_by_family: dict[str, float] = {}
+    for r in results:
+        fam = r["name"].split("-")[0]
+        if fam not in best_by_family or r["score"] > best_by_family[fam]:
+            best_by_family[fam] = r["score"]
+    for r in results:
+        fam = r["name"].split("-")[0]
+        if r["score"] < best_by_family[fam]:
+            r["score"] *= 0.35
+            r["family_muted"] = True
+
     results.sort(key=lambda r: (-r["score"], r["name"]))
     return results
 
@@ -198,16 +227,17 @@ def score_all(data: dict, query: str, manual: dict[str, list[str]] | None = None
 def main() -> int:
     ap = argparse.ArgumentParser(description="按诉求路由到候选技能")
     ap.add_argument("query", nargs="+", help="用户的话，原样贴进来")
-    ap.add_argument("--top", type=int, default=5)
+    ap.add_argument("--top", type=int, default=1)
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--explain", action="store_true", help="显示每条命中的词")
     ap.add_argument("--index", default=str(INDEX_PATH))
     args = ap.parse_args()
 
-    query = " ".join(args.query).strip()
+    query = RE_NOISE.sub(" ", " ".join(args.query)).strip()
     data = load_index(Path(args.index))
     manual = load_triggers(TRIGGERS_PATH)
-    results = score_all(data, query, manual)
+    all_results = score_all(data, query, manual)
+    results = [r for r in all_results if r["score"] >= MIN_SCORE]
 
     if args.json:
         print(json.dumps({"query": query, "count": len(results), "results": results[: args.top]},
@@ -215,7 +245,12 @@ def main() -> int:
         return 0
 
     if not results:
-        print(f"「{query}」→ 无命中。可以换个说法，或用 scan_skills.py --grep 直接找名字。")
+        best = all_results[0] if all_results else None
+        if best:
+            print(f"「{query}」→ 无对口技能（最高只有 {best['score']} 分，门槛 {MIN_SCORE}）。")
+            print(f"  最近沾边的是 {best['name']}，但没到门槛就别勉强——直接做。")
+        else:
+            print(f"「{query}」→ 无命中。换个说法，或用 scan_skills.py --grep 直接找名字。")
         return 0
 
     print(f"# 「{query}」→ {len(results)} 个命中，前 {min(args.top, len(results))} 条\n")

@@ -197,12 +197,41 @@ def build(rows: list[dict]) -> dict:
         row["kw"] = sorted(desc_kw | set(body_kw))
 
     return {
-        "version": 3,
+        "version": 4,
         "built_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         "total": len(rows),
         "gram_range": list(GRAM_RANGE),
+        "muted": family_shared(rows),
         "skills": rows,
     }
+
+
+def family_shared(rows: list[dict]) -> dict[str, list[str]]:
+    """找出每个技能家族内部共有的词。
+
+    bailian-cli / bailian-gen / bailian-* 这类 12 个成员共享“百炼”“模型”“应用”这种词，
+    它对「该不该用百炼」零信息量，却能让整个家族在任意 query 上挤出高分。
+    家族内 ≥ 一半成员都有的词，用的时候降权，不算它的本领。
+    """
+    from collections import Counter, defaultdict
+
+    fam_size: Counter[str] = Counter()
+    fam_kw: dict[str, Counter[str]] = defaultdict(Counter)
+    for row in rows:
+        fam = row["name"].split("-")[0]
+        fam_size[fam] += 1
+        for kw in set(row["kw"]):
+            fam_kw[fam][kw] += 1
+
+    out: dict[str, list[str]] = {}
+    for fam, cnt in fam_kw.items():
+        size = fam_size[fam]
+        if size < 3:
+            continue
+        shared = [kw for kw, c in cnt.items() if c >= max(2, size * 0.5)]
+        if shared:
+            out[fam] = sorted(shared)
+    return out
 
 
 def main() -> int:
