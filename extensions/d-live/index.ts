@@ -780,7 +780,12 @@ function rewrite(s: Sess, sid: string, text: string) {
         if (lines.length) {
           // 一条播报只放一句能塞进一行的：太长的按标点切成两句，免得手机上前端被迫缩字换行
           const capped: string[] = [];
-          for (const line of lines) for (const piece of splitLong(line)) capped.push(piece);
+          for (const line of lines)
+            for (const piece of splitLong(line)) {
+              // 切句切出来的碎渣（比如单独一个 emoji 加句号）并回上一句，别让它自己占一行
+              if (piece.length < 6 && capped.length) capped[capped.length - 1] += piece;
+              else capped.push(piece);
+            }
           emit({ kind: "lines", sid, lines: capped });
           s.history = s.history.concat(capped).slice(-8);
         }
