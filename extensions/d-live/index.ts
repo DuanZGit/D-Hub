@@ -85,13 +85,14 @@ function startEffortWatcher(emitFn: (p: Record<string, unknown>) => void) {
 const SYS = `把下面这段思考，改写成给用户看的进度解说：正在做什么、为什么这么做、做完会怎样。
 
 最重要的一条——每一句单独拎出来，也要让人看得懂“这是在为哪件事、做到哪一步”：
-- 句子里必须带出这件事本身，用 2~6 个字的短名字把目标点明，例如“思考条字句”“版本升级”“接线这套”“硬盘快满”；
+- 目标短名必须从「这轮要办的事」里提炼，2~6 个字，说清在办什么，例如用户说“思考条看不出来在做什么”就取“思考条文案”，说“升级 pi web”就取“版本升级”，“硬盘快满”就取“清硬盘”；
 - 这个短名字要出现在每一句里（或紧挨着它的对象），不能只第一句有、后面全丢；
+- 严禁拿目录名、项目代号、仓库名当目标名凑数，也严禁用“这边/这份/那头/动静/情况”这种没信息量的指代顶替目标；
 - 句子要带出这一步在干嘛/为什么这么干，而不是只报一个动作；
 - 禁止「先翻翻」「对一下」「这就改」「已确认」「跑通了」这种只有动作、没有对象的半截话，也禁止用「接着」「这下」「于是」开头却不交代主语。
 
-反面例子（不要写成这样）：先翻翻最近吐出来的几句。会话里的动静已经跑通了。这下页面那头一接回来。
-正面例子（要写成这样）：思考条字句还差点火候，先翻翻最近吐出来的几句。思考条这条线已经跑通了，页面那头一接回来就能看见。
+反面例子（不要写成这样）：折腾折腾这边等抓取跑着。先翻翻最近吐出来的几句。会话里的动静已经跑通了。
+正面例子（要写成这样）：思考条文案还差口气，先翻翻最近吐出来的几句。思考条文案改完了，页面一刷新就能看见。
 
 规则：
 - 第一句先交代这次要解决的是什么事、卡在哪（从输入里判断，不要照抄）；
@@ -109,7 +110,7 @@ const SYS = `把下面这段思考，改写成给用户看的进度解说：正�
 - 想不出内容就少写几句，不要凑数。
 只输出这些短句，每句一行。`;
 
-/** 当前会话所在目录名，当作「这件事」的拠点递给改写模型，免得它写出不知道在干嘛的句子 */
+/** 当前会话所在目录名（只做兵底，不当目标名） */
 function projectOf(ctx: any): string {
   try {
     const cwd = String(ctx?.cwd || ctx?.sessionManager?.getCwd?.() || "");
@@ -117,6 +118,32 @@ function projectOf(ctx: any): string {
   } catch {
     return "";
   }
+}
+
+/** 取本会话最近一条用户消息，作为「这轮要办的事」递给改写模型，否则它只能编空话 */
+function taskOf(ctx: any): string {
+  try {
+    const sm = ctx?.sessionManager;
+    const entries: any[] = sm?.getEntries?.() || [];
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const e = entries[i];
+      const m = e?.message || e?.payload?.message || e;
+      if (m?.role !== "user") continue;
+      const c = m.content;
+      const txt =
+        typeof c === "string"
+          ? c
+          : Array.isArray(c)
+            ? c.filter((x: any) => x?.type === "text").map((x: any) => x.text).join(" ")
+            : "";
+      const t = String(txt).replace(/\s+/g, " ").trim();
+      if (t && !t.startsWith("【系统恢复】")) return t.slice(0, 160);
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
 }
 
 // 工具名 → 人话。不调模型，零延迟。
@@ -702,9 +729,9 @@ function rewrite(s: Sess, sid: string, text: string) {
       const model = pickModel(ctx);
       if (!model) return;
       const prior = s.history.slice(-4);
-      const proj = projectOf(ctx);
-      const projLine = proj ? `这件事的短名字可以参考目录名：${proj}\n` : "";
-      const lead = projLine + (prior.length
+      const task = taskOf(ctx);
+      const taskLine = task ? `这轮要办的事（用户原话，目标短名从这里取）：${task}\n` : "";
+      const lead = taskLine + (prior.length
         ? "前面已经说过（接着往下讲，别重复）：\n" + prior.join("\n") + "\n\n这一段新的思考：\n"
         : "");
       try {
