@@ -46,12 +46,15 @@ def expand(template: str, agent_dir: Path) -> Path | None:
 
 
 def package_roots(agent_dir: Path) -> list[Path]:
-    """pi 包自带的技能：npm 包下 skills/* 与 plugins/*/。"""
+    """pi 自带的技能：npm 包下 skills/* 与 plugins/*/，以及本地扩展 extensions/*/skills。"""
     found: list[Path] = []
     npm = agent_dir / "npm" / "node_modules"
     if npm.is_dir():
         found += sorted(npm.glob("*/skills"))
         found += sorted(npm.glob("*/plugins/*"))
+    ext = agent_dir / "extensions"
+    if ext.is_dir():
+        found += sorted(ext.glob("*/skills"))
     return [p for p in found if p.is_dir()]
 
 
