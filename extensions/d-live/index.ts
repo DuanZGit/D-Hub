@@ -144,7 +144,6 @@ function taskOf(ctx: any): string {
     return "";
   }
 }
-}
 
 // 工具名 → 人话。不调模型，零延迟。
 const TOOL_LABEL: Record<string, string> = {
