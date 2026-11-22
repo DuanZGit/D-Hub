@@ -762,6 +762,8 @@ function rewrite(s: Sess, sid: string, text: string) {
           .split("\n")
           .map((line: string) =>
             line
+              // 模型偶尔在句首带个英文词（thinking / done 之类），去掉再入栏
+              .replace(/^[A-Za-z][A-Za-z\s]{1,12}(?=[\u4e00-\u9fa5])/, "")
               .replace(/^[-•*\d.、)\s]+/, "")
               .replace(/^["「『]|["」』]$/g, "")
               .trim(),
