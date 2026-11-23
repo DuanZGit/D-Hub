@@ -296,9 +296,9 @@ export function bashIntent(cmd: unknown): string {
     if (/login|auth|token/.test(c)) return "试登录";
     return "访问一个接口";
   }
-  // 跑脚本：说清是哪个脚本
+  // 跑脚本：规则版只给个中性占位（不甩英文脚本名），真正目的交给模型版 cmdIntent 说
   const script = rest.find((w) => /\.(py|js|mjs|ts|sh)$/i.test(w));
-  if (script && /\b(python3?|node|bash|sh|deno)\b/.test(c)) return `跑 ${baseName(script)} 脚本`;
+  if (script && /\b(python3?|node|bash|sh|deno)\b/.test(c)) return "跑脚本核对一下……";
   // 看文件内容：说清哪个文件
   if (/\b(sed\s+-n|head|tail|less|more|cat)\b/.test(c)) {
     const f = rest
@@ -329,8 +329,8 @@ export function bashIntent(cmd: unknown): string {
 }
 
 const CMD_SYS = `你看到的是 AI 助手刚刚执行的一条命令，以及它执行前在想什么。
-用一句中文说出这条命令的**意图**：在哪找什么、想确认什么、为了什么。要具体到对象，别只说「查一下」「跑一下」这种空话，说得口语、有画面感。
-规则：24 字以内；句尾加标点（…… 或 。）；带 1~2 个贴切的 emoji，句中穿插或句尾收一下都行，让语气轻快些；不要出现命令名、参数、端口、缩写字母（文件名可以保留）；不要引号和编号。
+用一句中文说出这条命令的**目的**：他想确认什么、想查清什么、为了把哪件事往前推。要具体到对象，别只说「查一下」「跑一下」「核对一下」这种空话，说得口语、有画面感。
+规则：24 字以内；句尾加标点（…… 或 。）；带 1~2 个贴切的 emoji，句中穿插或句尾收一下都行，让语气轻快些；不要出现命令名、参数、端口、脚本名、文件名、英文串、缩写字母——别说「跑 palette_check 脚本」，要说「核对一下页面配色有没有跑偏」这种能听懂目的的话；不要引号和编号。
 只输出这一句话。`;
 
 /** 让模型说清这条命令到底想干嘛；超时或失败返回空串，由 bashIntent 规则兜底。 */
