@@ -594,12 +594,13 @@ function emit(payload: Record<string, unknown>) {
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   const sid = typeof payload.sid === "string" ? payload.sid : "";
   const unknown = !sid || sid === "default";
+  // 只连一个页面时，地址栏的号可能没跟上当前会话（pi-web 切会话不写地址栏），
+  // 不再按号挑，直接推给这唯一页面；多页面仍严格按号分流，避免串台。
+  const solo = clients.size === 1;
   for (const c of clients) {
-    // 只推给「报了号且号对得上」的页面：空号连接（旧版页面）一律不推，
-    // 否则一个页面会收到所有会话的播报，串到别的会话里。
     const want = clientSids.get(c) || "";
-    if (!want) continue;
-    if (!unknown && want !== sid) {
+    if (!want && !solo) continue;
+    if (!solo && !unknown && want !== sid) {
       // 诊断：事件被号不对的连接挡下来时记一条（10 秒最多一条），
       // 「条子不出现」时能一眼看出是页面连错号还是根本没事件
       const stamp = Date.now();
