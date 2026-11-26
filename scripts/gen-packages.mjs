@@ -39,6 +39,7 @@ const exts = {
   "skill-search": ["按需检索本机全部技能，返回该用哪个和 SKILL.md 路径", "extensions/skill-search", "./index.ts", { typebox: true }],
   "skill-trigger": ["按任务内容自动匹配技能，省掉手动挑的一步", "extensions/skill-trigger", "./index.ts"],
   "sol-pi-stats": ["状态栏常驻 token / 上下文用量，另有 /sol 明细", "extensions/sol-pi-stats", "./index.ts"],
+  "webshare": ["把当前会话/文件分享成公网临时链接（自建域名，不限大小），/webshare", "extensions/webshare", "./index.ts"],
 };
 
 let n = 0;

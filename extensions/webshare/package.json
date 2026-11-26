@@ -1,0 +1,33 @@
+{
+  "name": "@duanz/pi-webshare",
+  "version": "1.0.0",
+  "description": "把当前会话/文件分享成公网临时链接（自建域名，不限大小），/webshare",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-web"
+  ],
+  "license": "MIT",
+  "author": "DuanZ",
+  "homepage": "https://github.com/DuanZGit/D-Hub/tree/master/extensions/webshare",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DuanZGit/D-Hub.git",
+    "directory": "extensions/webshare"
+  },
+  "files": [
+    "index.ts",
+    "README.md",
+    "README.en.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "image": "https://raw.githubusercontent.com/DuanZGit/D-Hub/master/docs/covers/webshare.png"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
