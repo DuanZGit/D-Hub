@@ -36,6 +36,22 @@ function log(msg) {
   process.stdout.write(line);
 }
 
+// fetch failed 往往只是外壳，真正的 ECONNREFUSED / socket hang up / timeout 藏在 err.cause 里。
+// 把 cause 链挖出来，否则日志永远只有一句没用的 "fetch failed"。
+function describeFetchError(err) {
+  if (!err) return "unknown error";
+  const parts = [err.name || "Error", err.message || String(err)];
+  let cause = err.cause;
+  let depth = 0;
+  while (cause && depth < 3) {
+    const code = cause.code ? `,code=${cause.code}` : "";
+    parts.push(`cause${depth}[${cause.name || "Error"}${code}]: ${cause.message || String(cause)}`);
+    cause = cause.cause;
+    depth++;
+  }
+  return parts.join(" | ");
+}
+
 // 自动探测 pi-web 运行端口
 function detectPort() {
   if (process.env.PI_WEB_PORT) return Number(process.env.PI_WEB_PORT);
@@ -93,6 +109,42 @@ function fixDanglingToolCall(sessionFile) {
   }
 }
 
+// 下发指令前先探活这个会话的 agent 入口，确认重启后已经能响应。
+async function probeSession(base, id, timeoutMs = 2000) {
+  try {
+    const res = await fetch(`${base}/api/agent/${id}?systemPrompt=0`, { signal: AbortSignal.timeout(timeoutMs) });
+    return { ok: res.ok, status: res.status };
+  } catch (err) {
+    return { ok: false, error: describeFetchError(err) };
+  }
+}
+
+// 带退避重试的恢复下发：单次 POST 偶发 fetch failed 不再直接放弃整个会话。
+async function deliverWithRetry(base, sessionId, message) {
+  const delays = [0, 1500, 4000];
+  let lastErr = "";
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    if (delays[attempt] > 0) await new Promise((r) => setTimeout(r, delays[attempt]));
+    try {
+      const postRes = await fetch(`${base}/api/agent/${sessionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "prompt", message }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = await postRes.json().catch(() => ({}));
+      log(`会话 ${sessionId} 恢复下发结果: status=${postRes.status}, attempt=${attempt + 1}, data=${JSON.stringify(data)}`);
+      if (postRes.ok) return true;
+      lastErr = `HTTP ${postRes.status}`;
+    } catch (err) {
+      lastErr = describeFetchError(err);
+      log(`会话 ${sessionId} 恢复下发失败 (第 ${attempt + 1} 次): ${lastErr}`);
+    }
+  }
+  log(`会话 ${sessionId} 恢复下发最终失败，已重试 ${delays.length} 次: ${lastErr}`);
+  return false;
+}
+
 function restartService() {
   const custom = process.env.PI_WEB_RESTART_CMD;
   if (custom) {
@@ -128,11 +180,13 @@ async function runDaemon(port, callerSessionId, delaySeconds) {
               });
             }
           }
-        } catch {}
+        } catch (err) {
+          log(`读取会话 ${id} 状态失败: ${describeFetchError(err)}`);
+        }
       }
     }
   } catch (err) {
-    log(`扫描运行中会话出错 (可能服务已断开): ${err.message}`);
+    log(`扫描运行中会话出错 (可能服务已断开): ${describeFetchError(err)}`);
   }
 
   log(`共扫描到 ${activeSessions.length} 个正在忙碌的会话: ${activeSessions.map((s) => s.id.slice(0, 8)).join(", ") || "无"}`);
@@ -190,32 +244,38 @@ async function runDaemon(port, callerSessionId, delaySeconds) {
     snapshot = { sessions: activeSessions };
   }
 
+  let failed = 0;
   for (const s of snapshot.sessions || []) {
     log(`正在恢复会话 ${s.id} (caller: ${s.isCaller})...`);
     if (s.sessionFile) fixDanglingToolCall(s.sessionFile);
+
+    // 下发前探活：会话还没被 agent runtime 接管时先等，避免 POST 撞在冷启动的空窗上。
+    let probe = await probeSession(base, s.id);
+    for (let i = 0; !probe.ok && i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      probe = await probeSession(base, s.id);
+    }
+    if (!probe.ok) {
+      log(`会话 ${s.id} 探活 15s 仍不可用 (${probe.error || `status=${probe.status}`})，跳过下发以免丢消息。`);
+      failed++;
+      continue;
+    }
 
     const message = s.isCaller
       ? "【系统通知】pi-web 服务已安全重启成功，新插件与配置已生效！后台受影响的其他任务已自动接续。"
       : "【系统恢复】后台插件升级已完成，pi-web 服务已平稳重启。你刚才的任务现场已自动接续，请检查并继续执行未完成的工作。";
 
-    try {
-      const postRes = await fetch(`${base}/api/agent/${s.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "prompt", message }),
-        signal: AbortSignal.timeout(10000),
-      });
-      const data = await postRes.json().catch(() => ({}));
-      log(`会话 ${s.id} 恢复下发结果: status=${postRes.status}, data=${JSON.stringify(data)}`);
-    } catch (err) {
-      log(`恢复会话 ${s.id} 失败: ${err.message}`);
-    }
+    const ok = await deliverWithRetry(base, s.id, message);
+    if (!ok) failed++;
   }
+  if (failed > 0) log(`警告: ${failed} 个会话未完成恢复下发，快照保留在 ${STATE_FILE} 供排查。`);
 
-  // 7. 清理快照
-  try {
-    fs.unlinkSync(STATE_FILE);
-  } catch {}
+  // 7. 清理快照（有失败时保留，便于排查）
+  if (failed === 0) {
+    try {
+      fs.unlinkSync(STATE_FILE);
+    } catch {}
+  }
   log("=== 安全重启接力完成 ===");
 }
 
