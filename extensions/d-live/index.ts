@@ -327,9 +327,16 @@ export function bashIntent(cmd: unknown): string {
 }
 
 const CMD_SYS = `你看到的是 AI 助手刚刚执行的一条命令，以及它执行前在想什么。
-用一句中文说出这条命令的**目的**：他想确认什么、想查清什么、为了把哪件事往前推。要具体到对象，别只说「查一下」「跑一下」「核对一下」这种空话，说得口语、有画面感。
+用一句中文说出这条命令的**目的**：要确认什么、要查清什么、把哪件事往前推。要具体到对象，别只说「查一下」「跑一下」「核对一下」这种空话，说得口语、有画面感。
 规则：24 字以内；句尾加标点（…… 或 。）；带 1~2 个贴切的 emoji，句中穿插或句尾收一下都行，让语气轻快些；不要出现命令名、参数、端口、脚本名、文件名、英文串、缩写字母——别说「跑 palette_check 脚本」，要说「核对一下页面配色有没有跑偏」这种能听懂目的的话；不要引号和编号。
+不许用人称：不出现「我/我们/您/你/他/她」，用没主语的说法，比如「正在核对页面配色」「这就去翻那份记录」。
+只描述这条命令本身在干嘛，绝不把上面这些要求当成命令目的复述出来（比如「想让我用一句话说明这条命令的目的」是错的）。
 只输出这一句话。`;
+
+/** 模型偶尔把指令本身当命令目的念出来，或用人称写句子——这种丢掉，退回老实描述 */
+function badIntent(line: string): boolean {
+  return /[我您你他她]/.test(line) || /一句话|这条命令|这条指令|想让|只输出|上面这些/.test(line);
+}
 
 /** 让模型说清这条命令到底想干嘛；超时或失败返回空串，由 bashIntent 规则兜底。 */
 async function cmdIntent(ctx: any, cmd: string, hint = ""): Promise<string> {
@@ -347,7 +354,7 @@ async function cmdIntent(ctx: any, cmd: string, hint = ""): Promise<string> {
             {
               role: "user",
               content: [
-                { type: "text", text: (hint ? `他刚才在想：${hint.slice(-300)}\n\n` : "") + `执行的命令：${text.slice(0, 800)}` },
+                { type: "text", text: (hint ? `动手前在想：${hint.slice(-300)}\n\n` : "") + `执行的命令：${text.slice(0, 800)}` },
               ],
               timestamp: Date.now(),
             },
@@ -363,7 +370,8 @@ async function cmdIntent(ctx: any, cmd: string, hint = ""): Promise<string> {
       .map((c: any) => c.text)
       .join("")
       .trim();
-    return out.split("\n")[0].replace(/^[-•*\d.、)\s]+/, "").replace(/[""'']/g, "").slice(0, 40);
+    const one = out.split("\n")[0].replace(/^[-•*\d.、)\s]+/, "").replace(/[""'']/g, "").slice(0, 40);
+    return badIntent(one) ? "" : one;
   } catch {
     return "";
   }
@@ -372,6 +380,8 @@ async function cmdIntent(ctx: any, cmd: string, hint = ""): Promise<string> {
 const TOOL_SYS = `你看到的是 AI 助手刚要做的一件事（工具名 + 参数），以及它动手前的想法。
 用一句中文说清：在什么里面、找什么/看什么/改什么、想确认什么、为了什么。要具体到对象，别只说「看文件」「搜一下」这种空话。
 规则：24 字以内；句尾加标点（…… 或 。）；带 1~2 个贴切的 emoji，句中穿插或句尾收一下都行，语气轻快些；不要出现参数名、缩写字母；不要引号和编号。
+不许用人称：不出现「我/我们/您/你/他/她」，用没主语的说法，比如「正在看那份记录」「这就去核对图片」。
+只描述这件工具活儿本身在干嘛，绝不把上面这些要求当成它的目的复述出来。
 只输出这一句话。`;
 
 /** 让模型说清这件工具活儿具体在干什么；超时或失败返回空串，由规则版兜底。 */
@@ -398,7 +408,7 @@ async function toolIntent(ctx: any, name: string, args: any, hint = ""): Promise
                 {
                   type: "text",
                   text:
-                    (hint ? `他刚才在想：${hint.slice(-300)}\n\n` : "") +
+                    (hint ? `动手前在想：${hint.slice(-300)}\n\n` : "") +
                     `工具：${name}\n参数：${brief}`,
                 },
               ],
@@ -416,7 +426,8 @@ async function toolIntent(ctx: any, name: string, args: any, hint = ""): Promise
       .map((c: any) => c.text)
       .join("")
       .trim();
-    return out.split("\n")[0].replace(/^[-•*\d.、)\s]+/, "").replace(/[""'']/g, "").slice(0, 60);
+    const one = out.split("\n")[0].replace(/^[-•*\d.、)\s]+/, "").replace(/[""'']/g, "").slice(0, 60);
+    return badIntent(one) ? "" : one;
   } catch {
     return "";
   }
@@ -656,6 +667,8 @@ function humanFromSeg(seg: string): string {
   const m = t.match(/[^。！？!?；;\n]*[。！？!?]?\s*$/);
   t = (m && m[0] ? m[0] : t).trim();
   t = t.replace(/[`*_#>$|\\]/g, "").replace(/[""'']/g, "").replace(/\s+/g, " ").trim();
+  // 从想法里摘的兜底句去掉句首人称，别冒出「我准备查看…」
+  t = t.replace(/^(我|我们|您|你|他|她)/, "").trim();
   // 中文太少，或英文/技术符占多数 → 不适合播给用户
   const zh = (t.match(/[\u4e00-\u9fa5]/g) || []).length;
   if (zh < 4 || zh * 2 < t.length) return "";
