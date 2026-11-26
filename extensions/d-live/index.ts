@@ -283,10 +283,11 @@ export function bashIntent(cmd: unknown): string {
     // 正则里带元字符的，别把符号本身当"要找的东西"
     if (/[\\^$*+?\[\](){}|]/.test(p)) p = "";
     const f = file.length ? baseName(file[file.length - 1]) : "";
-    if (p && f) return `在 ${f} 里找「${p}」`;
-    if (p) return `找「${p}」`;
-    if (f) return `在 ${f} 里翻`;
-    return "在文件里搜";
+    // 技术串（英文/路径/缩写）不外漏，只留看得懂的中文关键词
+    var human = function (x: string) { return !!x && /[\u4e00-\u9fa5]{2,}/.test(x) && !/[A-Za-z\/.\\]/.test(x); };
+    if (human(p) && human(f)) return `在${f}里找「${p}」`;
+    if (human(p)) return `找「${p}」`;
+    return "在文件里翻找";
   }
   // 访问接口：看路径语义
   if (/\bcurl\b/.test(c)) {
@@ -322,10 +323,7 @@ export function bashIntent(cmd: unknown): string {
     }
   }
   if (!label) return "跑一条命令";
-  const target = rest
-    .filter((w) => /^[a-z][a-z0-9-]{3,}$/i.test(w) && !CMD_WORDS.has(w.toLowerCase()))
-    .pop();
-  return target ? `${label} · ${target}` : label;
+  return label;
 }
 
 const CMD_SYS = `你看到的是 AI 助手刚刚执行的一条命令，以及它执行前在想什么。
@@ -357,7 +355,7 @@ async function cmdIntent(ctx: any, cmd: string, hint = ""): Promise<string> {
         },
         { cacheRetention: "none" },
       ),
-      new Promise((r) => setTimeout(() => r(null), 5000)),
+      new Promise((r) => setTimeout(() => r(null), 12000)),
     ]);
     if (!res) return "";
     const out = (res.content || [])
@@ -410,7 +408,7 @@ async function toolIntent(ctx: any, name: string, args: any, hint = ""): Promise
         },
         { cacheRetention: "none" },
       ),
-      new Promise((r) => setTimeout(() => r(null), 5000)),
+      new Promise((r) => setTimeout(() => r(null), 12000)),
     ]);
     if (!res) return "";
     const out = (res.content || [])
@@ -643,9 +641,26 @@ function describeTool(name: string, args: any): string {
     if (k === "path" || k === "url" || k === "uris") v = shortName(String(Array.isArray(v) ? v[0] : v));
     let s = String(v).replace(/\s+/g, " ").trim();
     if (s.length > 28) s = s.slice(0, 27) + "…";
+    // 路径/英文串/缩写不外漏，只拼看得懂的中文
+    if (!/[\u4e00-\u9fa5]/.test(s)) return label;
     return s ? `${label} ${s}` : label;
   }
   return label;
+}
+
+/** 从动手前的中文想法里挑一句能给用户看的人话；挑不出返回空 */
+function humanFromSeg(seg: string): string {
+  let t = String(seg || "").trim();
+  if (!t || isNoise(t)) return "";
+  // 只取最后一句：有句末标点就取那一截，没有就取整段
+  const m = t.match(/[^。！？!?；;\n]*[。！？!?]?\s*$/);
+  t = (m && m[0] ? m[0] : t).trim();
+  t = t.replace(/[`*_#>$|\\]/g, "").replace(/[""'']/g, "").replace(/\s+/g, " ").trim();
+  // 中文太少，或英文/技术符占多数 → 不适合播给用户
+  const zh = (t.match(/[\u4e00-\u9fa5]/g) || []).length;
+  if (zh < 4 || zh * 2 < t.length) return "";
+  if (t.length > 26) t = "…" + t.slice(-25);
+  return /[。！？!?]$/.test(t) ? t : t + "。";
 }
 
 function shouldCut(s: string): boolean {
@@ -933,7 +948,7 @@ export default function piWebLive(pi: ExtensionAPI) {
       // 先用规则版即时占位（零延迟），模型算出真正的意图后再把那一行改写掉
       const cmd = event?.args?.command;
       const key = tid || `t${Date.now()}`;
-      const placeholder = bashIntent(cmd);
+      const placeholder = humanFromSeg(s.seg) || bashIntent(cmd);
       emit({ kind: "tool", sid, tid: key, text: placeholder });
       const leak = s.seg || "";
       cmdIntent(ctx, cmd, leak)
@@ -945,7 +960,7 @@ export default function piWebLive(pi: ExtensionAPI) {
     }
     {
       const key = tid || `t${Date.now()}`;
-      const placeholder = describeTool(name, event?.args);
+      const placeholder = humanFromSeg(s.seg) || describeTool(name, event?.args);
       emit({ kind: "tool", sid, tid: key, text: placeholder });
       // 规则版只说了「在文件里找 xxx」，再让模型说清在什么里找什么、为了啥
       toolIntent(ctx, name, event?.args, s.seg || "")
