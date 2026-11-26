@@ -948,24 +948,26 @@ export default function piWebLive(pi: ExtensionAPI) {
       // 先用规则版即时占位（零延迟），模型算出真正的意图后再把那一行改写掉
       const cmd = event?.args?.command;
       const key = tid || `t${Date.now()}`;
-      const placeholder = humanFromSeg(s.seg) || bashIntent(cmd);
-      emit({ kind: "tool", sid, tid: key, text: placeholder });
+      // 空泛兜底（看一眼/查一下）不落行：没实质想法就等模型改写，改不出来就整行不显示
+      const human = humanFromSeg(s.seg);
+      if (human) emit({ kind: "tool", sid, tid: key, text: human });
       const leak = s.seg || "";
       cmdIntent(ctx, cmd, leak)
         .then((said) => {
-          if (said && said !== placeholder) emit({ kind: "tool-intent", sid, tid: key, text: said });
+          if (said && said !== human) emit({ kind: "tool-intent", sid, tid: key, text: said });
         })
         .catch(() => {});
       return;
     }
     {
       const key = tid || `t${Date.now()}`;
-      const placeholder = humanFromSeg(s.seg) || describeTool(name, event?.args);
-      emit({ kind: "tool", sid, tid: key, text: placeholder });
-      // 规则版只说了「在文件里找 xxx」，再让模型说清在什么里找什么、为了啥
+      // 空泛兜底（看一眼/查一下）不落行：没实质想法就等模型改写，改不出来就整行不显示
+      const human = humanFromSeg(s.seg);
+      if (human) emit({ kind: "tool", sid, tid: key, text: human });
+      // 让模型说清这一步到底在干嘛；改不出来就整行不显示
       toolIntent(ctx, name, event?.args, s.seg || "")
         .then((said) => {
-          if (said && said !== placeholder) emit({ kind: "tool-intent", sid, tid: key, text: said });
+          if (said && said !== human) emit({ kind: "tool-intent", sid, tid: key, text: said });
         })
         .catch(() => {});
     }
