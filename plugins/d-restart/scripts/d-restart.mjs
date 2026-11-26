@@ -129,7 +129,9 @@ async function deliverWithRetry(base, sessionId, message) {
       const postRes = await fetch(`${base}/api/agent/${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "prompt", message }),
+        // 重启后目标会话多半还在 streaming，普通 prompt 会被 agent 拒掉（prompt_rejected）。
+        // followUp 把恢复指令排到当前任务后面，既不打断也能保证一定被处理。
+        body: JSON.stringify({ type: "prompt", message, streamingBehavior: "followUp" }),
         signal: AbortSignal.timeout(15000),
       });
       const data = await postRes.json().catch(() => ({}));
