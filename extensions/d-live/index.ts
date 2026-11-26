@@ -723,28 +723,35 @@ function flushSeg(s: Sess, sid: string) {
 /** 改写用的模型：虚拟路由模型（如 group/df-jev）每轮都要先判档，实测 4–6 秒；
  *  优先换同 provider 下的物理模型直连。用 PI_WEB_LIVE_MODEL=<provider>/<id> 可显式指定。 */
 function pickModel(ctx: any) {
-  const cur = ctx?.model;
-  if (!cur) return null;
-  const reg = ctx?.modelRegistry;
-  const env = process.env.PI_WEB_LIVE_MODEL;
-  if (env && reg?.find) {
-    const i = env.indexOf("/");
-    const p = i > 0 ? env.slice(0, i) : cur.provider;
-    const id = i > 0 ? env.slice(i + 1) : env;
-    try {
-      const found = reg.find(p, id);
-      if (found) return found;
-    } catch {}
-  }
-  if (reg?.find && typeof cur.id === "string" && cur.id.startsWith("group/")) {
-    for (const cand of ["auto/dfmodel", cur.id.replace(/^group\//, "")]) {
+  // ctx.model / ctx.modelRegistry 都是 getter：子代理退出或会话被替换后，读已失效的
+  // 上下文会直接抛异常（chunk-KSDI5FD4.js 的 ctx stale）。这里整段兜住——拿不到就
+  // 当作没有模型可用，安全降级，绝不把异常抛给调用方（否则后台改写链会变成未处理拒绝）。
+  try {
+    const cur = ctx?.model;
+    if (!cur) return null;
+    const reg = ctx?.modelRegistry;
+    const env = process.env.PI_WEB_LIVE_MODEL;
+    if (env && reg?.find) {
+      const i = env.indexOf("/");
+      const p = i > 0 ? env.slice(0, i) : cur.provider;
+      const id = i > 0 ? env.slice(i + 1) : env;
       try {
-        const found = reg.find(cur.provider, cand);
+        const found = reg.find(p, id);
         if (found) return found;
       } catch {}
     }
+    if (reg?.find && typeof cur.id === "string" && cur.id.startsWith("group/")) {
+      for (const cand of ["auto/dfmodel", cur.id.replace(/^group\//, "")]) {
+        try {
+          const found = reg.find(cur.provider, cand);
+          if (found) return found;
+        } catch {}
+      }
+    }
+    return cur;
+  } catch {
+    return null;
   }
-  return cur;
 }
 
 function rewrite(s: Sess, sid: string, text: string) {
@@ -827,6 +834,9 @@ function rewrite(s: Sess, sid: string, text: string) {
         }
       }
     })
+    // 兜底：任何漏出来的异常（含 ctx 失效）都在这里吞掉，别让它变成未处理拒绝把
+    // 子代理退出过程打成假失败（Node 对此的退出码是 7/1）
+    .catch(() => {})
     .finally(() => {
       s.pending--;
     });
