@@ -79,6 +79,11 @@ L3/L4 的产出不必每次从零搭。这几套骨架覆盖了绝大多数「�
 | 有因果或时间顺序 | `templates/showcase-narrative.html` 叙事 | 时间轴播放 + 每幕重放动画 |
 | 有参数可调、结果跟着变 | `templates/showcase-dashboard.html` 仪表盘 | 滑杆 → 实时重算 |
 | 谁连着谁，且节点细节多 | `templates/showcase-topology.html` 拓扑 | 点节点出详情 + 请求沿链走 |
+| 讲法骨架 · 参数清单 / 产品说明 | `templates/skeleton-tech.html` 终端仪表盘 | 状态条 + 编号导轨 + 栅格卡 |
+| 讲法骨架 · 概念疏解 / 观点短文 | `templates/skeleton-ink.html` 书页 | 竖排书脊 + 正文缩进 |
+| 讲法骨架 · 视觉冲击型介绍 / 报告 | `templates/skeleton-mag.html` 杂志封面 | 首字下沉 + 三栏 + 色块 |
+| 讲法骨架 · 情绪 / 留白 / 一句话观点 | `templates/skeleton-zen.html` 留白卷 | 窄栏 + 大间距 + 细线 |
+| 找一个动起来的主视觉 | `templates/motion-16.html` 动效库 | 16 组 Three.js 动效，点选预览 + 复制核心代码 |
 | **一组数字**（占比 / 排名 / 流程 / 时间线 / 分布） | **`minicharts` 技能**（不是模板） | 每个数字画成主题里的实物，手绘、按比例、可点 |
 
 **套用规则**
@@ -157,5 +162,7 @@ pi-web 只把 **`write` / `edit` / `apply_patch` 调用过的路径**当附件�
 | L3 交互页骨架 | `templates/interactive-page.html` |
 | L4 自播放引擎 + DECK 格式 | `templates/autoplay.html` |
 | 展示台 · 方块榜 / 叙事 / 仪表盘 / 拓扑 | `templates/showcase-*.html` |
+| L3 讲法骨架 · 四套主题 + 8 类内容 | `templates/skeleton-*.html` |
+| Three.js 动效 · 16 组可复制 | `templates/motion-16.html` |
 
 产出默认写到 cwd 下的 `explain/`（用户指定则以用户为准），文件名用内容主题，不用 `output.html`。
