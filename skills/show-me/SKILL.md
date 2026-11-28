@@ -72,6 +72,15 @@ L0→L1 只要第 1 条；L2 起两条都要。刹车：
 
 L3/L4 的产出不必每次从零搭。这几套骨架覆盖了绝大多数「把结果摆给人看」的场合，**能套就套，套不上再自己写**。
 
+**先路由，再动手。** 拿不准该用哪一个，跑一句：
+
+```bash
+node scripts/route.mjs "<你要讲的内容，一句话>"     # 1 个推荐 + 2 个备选，附理由
+```
+
+它是本地关键词打分，不联网。完整判定顺序、四类展示台为什么互不重叠、以及「选错比不选更贵」的反例，
+在 [`templates/ROUTING.md`](templates/ROUTING.md)。**脚本只给候选，形状由你拍板。**
+
 | 内容形状 | 骨架 | 关键交互 |
 |---|---|---|
 | 要用户勾选 / 复制指令 | `~/.pi/agent/templates/decision-deck-template.html` 决策台 | 卡片多选 + 实时拼提示词 |
@@ -97,8 +106,10 @@ L3/L4 的产出不必每次从零搭。这几套骨架覆盖了绝大多数「�
 - **先看形状，不看名字**。榜 / 叙事 / 仪表盘 / 拓扑四者不重叠：选错比从零写还慢。
 - **动效库 vs 交互情景库**：`motion-16` 是背景，打开就自己动；`interactive-scenes` 要人参与——能拖、能点、能演一段过程、能看远近层次。用户说「互动」「演示」「情景」「我想试试」时走后者。
 - **能套就套**：复制到产出目录，只改数据区 + 文案，保留动效层。每个骨架文件头有「几处要改」，先读那 30 行。
+- **模板是外链库，交付前必须 bundle**：模板里写的是 `<script src="assets/three.min.js"></script>`，所以每个模板只有 20–38KB、能一次读完；
+  改完跑 `node scripts/bundle.mjs explain/<主题>.html` 把库内联回去。漏了这步，页面换目录打开就 Three.js 404、动效全黑。
 - **套不上就自己写**，别把内容硬塞进不合适的骨架。但自己写的也必须带动效和交互 —— 值不值得动，看内容有没有「因果 / 可调 / 关系」。
-- 展示页默认写到 `~/workspace/viz/`；用户指定则以用户为准。
+- 产出默认写到 cwd 下的 `explain/`；用户指定则以用户为准。
 
 **别被自检第 1 条误伤**：那条「不要做成仪表盘」针对的是**讲解型**页面；展示台是**呈现型**，本来就该有图表、数字和轨道。
 
@@ -161,11 +172,14 @@ pi-web 只把 **`write` / `edit` / `apply_patch` 调用过的路径**当附件�
 | L3/L4 视觉反 slop 清单 | `references/anti-slop.md` |
 | L3/L4 教学法、层级与交互模式 | `references/pedagogy.md` |
 | L3/L4 纸墨视觉体系、排版数值、五个坑、验证清单 | `references/visual-baseline.md` |
+| 路由：内容形状 → 模板的判定表、反例、套用与 bundle | `templates/ROUTING.md` |
 | L3 交互页骨架 | `templates/interactive-page.html` |
 | L4 自播放引擎 + DECK 格式 | `templates/autoplay.html` |
 | 展示台 · 方块榜 / 叙事 / 仪表盘 / 拓扑 | `templates/showcase-*.html` |
 | L3 讲法骨架 · 四套主题 + 8 类内容 | `templates/skeleton-*.html` |
 | Three.js 动效 · 16 组可复制 | `templates/motion-16.html` |
 | 交互情景 · 13 组可玩可演 | `templates/interactive-scenes.html` |
+| Three.js 共享库（模板外链它，交付前由 bundle 内联） | `templates/assets/three.min.js` |
+| 路由打分 / 打包内联 | `scripts/route.mjs`、`scripts/bundle.mjs` |
 
 产出默认写到 cwd 下的 `explain/`（用户指定则以用户为准），文件名用内容主题，不用 `output.html`。
